@@ -52,6 +52,22 @@
     trash.sort((a,b)=>a.deletedAt.localeCompare(b.deletedAt));
     return {tasks,trash,productColors};
   }
-  const api={toEntities,diffEntities,applyOperation,toPlan};
+  // Keep other products in their slots, including when products are interleaved.
+  function reorderProductTasks(tasks,sourceId,targetId,after=false){
+    const source=tasks.find(t=>t.id===sourceId),target=tasks.find(t=>t.id===targetId);
+    if(!source||!target||source===target||source.product.trim()!==target.product.trim())return tasks;
+    const product=source.product.trim(),siblings=tasks.filter(t=>t.product.trim()===product);
+    const reordered=siblings.filter(t=>t.id!==sourceId);
+    reordered.splice(reordered.findIndex(t=>t.id===targetId)+(after?1:0),0,source);
+    if(reordered.every((t,i)=>t===siblings[i]))return tasks;
+    const orderedPositions=tasks.every((t,i)=>Number.isFinite(t.position)&&(!i||t.position>tasks[i-1].position));
+    let siblingIndex=0;
+    return tasks.map((t,i)=>{
+      const next=t.product.trim()===product?reordered[siblingIndex++]:t;
+      const position=orderedPositions?t.position:i*1024;
+      return next===t&&next.position===position?t:{...next,position};
+    });
+  }
+  const api={toEntities,diffEntities,applyOperation,toPlan,reorderProductTasks};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.TrackerSyncCore=api;
 })(globalThis);

@@ -222,3 +222,14 @@ main{height:100dvh;max-width:none;padding:0 12px;display:flex;flex-direction:col
 .backup-button{border:0;background:none;color:#8b9a7f;font-size:17px;padding:0 4px;cursor:pointer}
 .save-state[data-status=saving],.save-state[data-status=retrying],.save-state[data-status=offline]{color:#ab7a30}
 .save-state[data-status=saved]{color:#6c8c60}
+/* Reorder from the task column; sprint bars retain their own drag behavior. */
+.task-info{padding-left:23px;cursor:grab;touch-action:none}
+.task-reorder{position:absolute;left:5px;top:50%;transform:translateY(-50%);width:15px;height:22px;padding:0;border:0;background:none;color:#a6b09f;font-size:15px;cursor:grab;touch-action:none}
+.task-reorder:hover{color:#527545}
+.task-name:not(:focus){cursor:grab}
+.task-row.is-reordering .task-info{opacity:.45}
+.task-info.drop-before:before,.task-info.drop-after:after{content:'';position:absolute;left:3px;right:3px;height:2px;background:#52825b;z-index:10;pointer-events:none}
+.task-info.drop-before:before{top:0}.task-info.drop-after:after{bottom:0}
+body.reordering-task,body.reordering-task *{cursor:grabbing!important;user-select:none!important}
+.task-drag-preview{position:fixed;z-index:1000;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:7px 12px;border:1px solid #9cb78e;border-radius:4px;background:#fbfdf8;box-shadow:0 4px 14px #24372e24;color:#34432e;font-size:11px;pointer-events:none}
+.task-drag-preview.is-blocked{border-color:#cbb9af;color:#9c887b}

@@ -124,7 +124,7 @@ function renderTimeline(){
   renderRows();renderDerived();
 }
 function renderRows(){
-  $('taskRows').innerHTML=tasks.map(t=>`<div class="task-row ${t.id===activeTaskId?'is-active':''}" data-task-id="${esc(t.id)}"><div class="task-info"><input class="task-name" data-field="name" aria-label="Название задачи" maxlength="120" value="${esc(t.name)}"><div class="product-line"><span class="product-dot"></span><input data-field="product" aria-label="Продукт" placeholder="Продукт" maxlength="80" value="${esc(t.product)}"><span class="unassigned-label" hidden>Не назначено</span></div><button class="delete-task" data-delete aria-label="Удалить задачу ${esc(t.name||'Без названия')}" title="Удалить задачу">×</button></div><div class="track"><div class="grid">${Array.from({length:visibleSprints},(_,j)=>`<div class="${base+j===selected?'selected':''}"></div>`).join('')}</div><div class="task-bar" tabindex="0" role="slider" aria-label="Положение задачи ${esc(t.name||'Без названия')}"><div class="resize-handle left" data-edge="left"></div><div class="bar-content"><span class="bar-symbol">▤</span><strong class="bar-name"></strong><span class="bar-unassigned" hidden title="Исполнитель не назначен" aria-label="Исполнитель не назначен">!</span><span class="bar-duration"></span></div><div class="resize-handle right" data-edge="right"></div></div><div class="empty-plan" hidden>В другом периоде</div></div></div>`).join('');
+  $('taskRows').innerHTML=tasks.map(t=>`<div class="task-row ${t.id===activeTaskId?'is-active':''}" data-task-id="${esc(t.id)}"><div class="task-info"><button class="task-reorder" aria-label="Изменить порядок задачи ${esc(t.name||'Без названия')}" title="Перетащить в пределах продукта · Alt + ↑/↓">⠿</button><input class="task-name" data-field="name" aria-label="Название задачи" maxlength="120" value="${esc(t.name)}"><div class="product-line"><span class="product-dot"></span><input data-field="product" aria-label="Продукт" placeholder="Продукт" maxlength="80" value="${esc(t.product)}"><span class="unassigned-label" hidden>Не назначено</span></div><button class="delete-task" data-delete aria-label="Удалить задачу ${esc(t.name||'Без названия')}" title="Удалить задачу">×</button></div><div class="track"><div class="grid">${Array.from({length:visibleSprints},(_,j)=>`<div class="${base+j===selected?'selected':''}"></div>`).join('')}</div><div class="task-bar" tabindex="0" role="slider" aria-label="Положение задачи ${esc(t.name||'Без названия')}"><div class="resize-handle left" data-edge="left"></div><div class="bar-content"><span class="bar-symbol">▤</span><strong class="bar-name"></strong><span class="bar-unassigned" hidden title="Исполнитель не назначен" aria-label="Исполнитель не назначен">!</span><span class="bar-duration"></span></div><div class="resize-handle right" data-edge="right"></div></div><div class="empty-plan" hidden>В другом периоде</div></div></div>`).join('');
   $('emptyTasks').hidden=tasks.length>0;
   $('taskCount').textContent=String(tasks.length);
   $('undoDelete').disabled=trash.length===0;
@@ -199,7 +199,83 @@ $('summarySprint').onchange=e=>{selected=+e.target.value;base=Math.floor(selecte
 $('sprints').onclick=e=>{const cell=e.target.closest('[data-sprint]');if(cell){selected=+cell.dataset.sprint;renderTimeline()}};
 function navigate(delta){base=Math.max(0,Math.min(24-visibleSprints,base+delta));selected=base;renderTimeline()}
 $('prev').onclick=()=>navigate(-visibleSprints);$('next').onclick=()=>navigate(visibleSprints);$('today').onclick=()=>{base=0;selected=0;renderTimeline()};
-let drag=null;
+let drag=null,rowDrag=null;
+function moveTaskWithinProduct(sourceId,targetId,after){
+  const next=TrackerSyncCore.reorderProductTasks(tasks,sourceId,targetId,after);
+  if(next===tasks)return;
+  tasks=next;renderRows();renderAllocations();persist();
+}
+function clearRowDrop(){
+  for(const info of $('taskRows').querySelectorAll('.drop-before,.drop-after'))info.classList.remove('drop-before','drop-after');
+}
+function updateRowDrop(){
+  if(!rowDrag?.started)return;
+  clearRowDrop();rowDrag.targetId=null;
+  const info=document.elementFromPoint(rowDrag.x,rowDrag.y)?.closest('.task-info');
+  const row=info?.closest('[data-task-id]'),target=tasks.find(t=>t.id===row?.dataset.taskId);
+  const source=tasks.find(t=>t.id===rowDrag.id);
+  const allowed=target&&source&&target.id!==source.id&&productKey(target)===productKey(source);
+  rowDrag.ghost.classList.toggle('is-blocked',!allowed);
+  if(!allowed)return;
+  const rect=info.getBoundingClientRect();rowDrag.targetId=target.id;rowDrag.after=rowDrag.y>rect.top+rect.height/2;
+  info.classList.add(rowDrag.after?'drop-after':'drop-before');
+}
+function scrollRowDrag(){
+  if(!rowDrag?.started)return;
+  const scroller=document.querySelector('.timeline-scroll'),rect=scroller.getBoundingClientRect();
+  if(rowDrag.x>=rect.left&&rowDrag.x<=rect.right&&rowDrag.y>=rect.top&&rowDrag.y<=rect.bottom){
+    const top=rect.top+document.querySelector('.timeline-head').offsetHeight+document.querySelector('.sprint-head').offsetHeight+24;
+    const speed=rowDrag.y<top?-Math.min(14,(top-rowDrag.y)/3):rowDrag.y>rect.bottom-28?Math.min(14,(rowDrag.y-rect.bottom+28)/3):0;
+    if(speed){scroller.scrollTop+=speed;updateRowDrop();}
+  }
+  rowDrag.frame=requestAnimationFrame(scrollRowDrag);
+}
+function finishRowDrag(commit=false){
+  if(!rowDrag)return;
+  const state=rowDrag;rowDrag=null;
+  cancelAnimationFrame(state.frame);state.ghost?.remove();clearRowDrop();
+  document.body.classList.remove('reordering-task');
+  $('taskRows').querySelector('.is-reordering')?.classList.remove('is-reordering');
+  if($('taskRows').hasPointerCapture(state.pointerId))$('taskRows').releasePointerCapture(state.pointerId);
+  if(commit&&state.started&&state.targetId)moveTaskWithinProduct(state.id,state.targetId,state.after);
+  if(commit&&!state.started&&state.input){state.input.focus();}
+  if(state.started){const grip=[...$('taskRows').children].find(r=>r.dataset.taskId===state.id)?.querySelector('.task-reorder');grip?.focus({preventScroll:true});}
+  if(cloudDeferred){cloudDeferred=false;cloud?.refresh().catch(()=>{});}
+}
+$('taskRows').addEventListener('pointerdown',e=>{
+  const info=e.target.closest('.task-info');
+  if(!info||e.button!==0||e.target.closest('[data-delete],[data-field="product"]'))return;
+  // A focused title keeps normal text editing and selection.
+  const input=e.target.closest('.task-name');if(input&&document.activeElement===input)return;
+  const row=info.closest('[data-task-id]');selectTask(row.dataset.taskId);
+  rowDrag={id:row.dataset.taskId,pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,x:e.clientX,y:e.clientY,input,started:false};
+  $('taskRows').setPointerCapture(e.pointerId);e.preventDefault();
+});
+$('taskRows').addEventListener('pointermove',e=>{
+  if(!rowDrag||rowDrag.pointerId!==e.pointerId)return;
+  rowDrag.x=e.clientX;rowDrag.y=e.clientY;
+  if(!rowDrag.started&&Math.hypot(e.clientX-rowDrag.startX,e.clientY-rowDrag.startY)<5)return;
+  e.preventDefault();
+  if(!rowDrag.started){
+    rowDrag.started=true;document.body.classList.add('reordering-task');
+    [...$('taskRows').children].find(r=>r.dataset.taskId===rowDrag.id)?.classList.add('is-reordering');
+    rowDrag.ghost=document.createElement('div');rowDrag.ghost.className='task-drag-preview';
+    rowDrag.ghost.textContent=tasks.find(t=>t.id===rowDrag.id)?.name||'Без названия';
+    document.body.append(rowDrag.ghost);scrollRowDrag();
+  }
+  rowDrag.ghost.style.left=`${e.clientX+14}px`;rowDrag.ghost.style.top=`${e.clientY+12}px`;updateRowDrop();
+});
+$('taskRows').addEventListener('pointerup',()=>finishRowDrag(true));
+$('taskRows').addEventListener('pointercancel',()=>finishRowDrag());
+$('taskRows').addEventListener('lostpointercapture',()=>finishRowDrag());
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&rowDrag){e.preventDefault();finishRowDrag();}});
+$('taskRows').addEventListener('keydown',e=>{
+  if(!e.target.closest('.task-reorder')||!e.altKey||e.ctrlKey||e.metaKey||!['ArrowUp','ArrowDown'].includes(e.key))return;
+  e.preventDefault();e.stopPropagation();
+  const source=tasks.find(t=>t.id===e.target.closest('[data-task-id]').dataset.taskId);
+  const siblings=tasks.filter(t=>productKey(t)===productKey(source)),index=siblings.indexOf(source),target=siblings[index+(e.key==='ArrowUp'?-1:1)];
+  if(target){moveTaskWithinProduct(source.id,target.id,e.key==='ArrowDown');[...$('taskRows').children].find(r=>r.dataset.taskId===source.id)?.querySelector('.task-reorder').focus({preventScroll:true});}
+});
 $('taskRows').addEventListener('pointerdown',e=>{
   const bar=e.target.closest('.task-bar');if(!bar||e.button!==0)return;
   const t=tasks.find(t=>t.id===bar.closest('[data-task-id]').dataset.taskId);selectTask(t.id);
@@ -234,7 +310,7 @@ $('zoomY').addEventListener('input',e=>{zoom.y=+e.target.value;applyZoom()});
 function resetZoom(){zoom.x=100;zoom.y=100;applyZoom();sheetScroll.scrollLeft=0;}
 $('resetZoom').addEventListener('click',resetZoom);
 document.addEventListener('keydown',e=>{
-  if(!e.altKey||e.ctrlKey||e.metaKey||e.shiftKey||e.target.closest('input,textarea,select,[contenteditable="true"]'))return;
+  if(e.defaultPrevented||!e.altKey||e.ctrlKey||e.metaKey||e.shiftKey||e.target.closest('input,textarea,select,[contenteditable="true"]'))return;
   if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Digit0','Numpad0'].includes(e.code))return;
   e.preventDefault();
   if(e.code==='Digit0'||e.code==='Numpad0'){resetZoom();return;}
@@ -289,7 +365,7 @@ function syncStatus(status){
   if(cloud?.ready)document.querySelector('main').inert=false;
 }
 function applyCloudPlan(plan){
-  if(drag){cloudDeferred=true;return false;}
+  if(drag||rowDrag){cloudDeferred=true;return false;}
   cloudApplying=true;
   try{
     const oldIds=tasks.filter(visibleTask).map(t=>t.id).join('|');

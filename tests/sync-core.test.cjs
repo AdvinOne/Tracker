@@ -23,3 +23,24 @@ test('An empty saved board stays empty; prototype-like product names are safe',(
  const entities=new Map([['p:__proto__',{id:'p:__proto__',kind:'product',deleted:false,payload:{color:'#638bb8'}}]]);
  const result=core.toPlan(entities);assert.equal(Object.getOwnPropertyDescriptor(result.productColors,'__proto__').value,'#638bb8');
 });
+test('Reorder only within a product, preserving other product slots and sprint data after sync',()=>{
+ const tasks=['a','x','b','y','c'].map((id,i)=>({...make(id),product:['x','y'].includes(id)?'Other':'Продукт',position:i*1024,start:i,end:i+1}));
+ const result=core.reorderProductTasks(tasks,'c','a');
+ assert.deepEqual(result.map(t=>t.id),['c','x','a','y','b']);
+ assert.equal(result[1],tasks[1]);assert.equal(result[3],tasks[3]);
+ for(const task of result){const old=tasks.find(t=>t.id===task.id);assert.equal(task.start,old.start);assert.equal(task.end,old.end);assert.deepEqual(task.assignments,old.assignments);}
+ const server=core.toEntities({tasks,trash:[],productColors:{}});
+ const operations=core.diffEntities(server,core.toEntities({tasks:result,trash:[],productColors:{}}));
+ assert.ok(operations.every(op=>!['t:x','t:y'].includes(op.id)&&op.patches.every(p=>p.path[0]==='position')));
+ for(const op of operations)core.applyOperation(server,op);
+ assert.deepEqual(core.toPlan(server).tasks.map(t=>t.id),result.map(t=>t.id));
+ assert.deepEqual(core.reorderProductTasks(result,'c','b',true).map(t=>t.id),tasks.map(t=>t.id));
+ assert.equal(core.reorderProductTasks(tasks,'a','x'),tasks);
+ assert.equal(core.reorderProductTasks(tasks,'a','a'),tasks);
+ assert.equal(core.reorderProductTasks(tasks,'missing','a'),tasks);
+});
+test('Reordering handles unassigned products and legacy missing or duplicate positions',()=>{
+ const tasks=[{...make('a'),product:' '},{...make('x'),product:'Other'},{...make('b'),product:''}];
+ const result=core.reorderProductTasks(tasks,'a','b',true);
+ assert.deepEqual(core.toPlan(core.toEntities({tasks:result})).tasks.map(t=>t.id),['b','x','a']);
+});
