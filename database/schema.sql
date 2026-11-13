@@ -50,15 +50,17 @@ begin
     if p_kind='task' then
       if not ((cardinality(path)=1 and path[1] in ('name','product','start','end','position')) or (cardinality(path)=2 and path[1]='assignments' and path[2] in ('sa','ak','my','aa','dg','fb','ad','as','al','ek','sg','au'))) then raise exception 'Invalid field'; end if;
     elsif cardinality(path)<>1 or path[1]<>'color' then raise exception 'Invalid product field'; end if;
-    if coalesce((patch->>'remove')::boolean,false) then doc=doc #- path;
+    if coalesce((patch->>'remove')::boolean,false) then
+      if cardinality(path)<>2 or path[1]<>'assignments' then raise exception 'Required field cannot be removed'; end if;
+      doc=doc #- path;
     else doc=jsonb_set(doc,path,patch->'value',true); end if;
   end loop;
   if p_kind='task' then
-    if jsonb_typeof(doc->'name')<>'string' or length(doc->>'name')>120 or jsonb_typeof(doc->'product')<>'string' or length(doc->>'product')>80 or (doc->>'start')::int not between 0 and 23 or (doc->>'end')::int not between (doc->>'start')::int and 23 or jsonb_typeof(doc->'assignments')<>'object' then raise exception 'Invalid task'; end if;
+    if jsonb_typeof(doc->'name') is distinct from 'string' or length(doc->>'name')>120 or jsonb_typeof(doc->'product') is distinct from 'string' or length(doc->>'product')>80 or jsonb_typeof(doc->'start') is distinct from 'number' or jsonb_typeof(doc->'end') is distinct from 'number' or (doc->>'start')::int not between 0 and 23 or (doc->>'end')::int not between (doc->>'start')::int and 23 or jsonb_typeof(doc->'assignments') is distinct from 'object' then raise exception 'Invalid task'; end if;
     for member in select key,value from jsonb_each(doc->'assignments') loop
       if jsonb_typeof(member.value)<>'number' or (member.value::text)::numeric not between 0 and 100 then raise exception 'Invalid allocation'; end if;
     end loop;
-  elsif (doc->>'color') !~ '^#[0-9a-fA-F]{6}$' then raise exception 'Invalid color'; end if;
+  elsif jsonb_typeof(doc->'color') is distinct from 'string' or (doc->>'color') !~ '^#[0-9a-fA-F]{6}$' then raise exception 'Invalid color'; end if;
   update public.tracker_entities set payload=doc,deleted=case when p_action='delete' then true when p_action='restore' then false else deleted end,version=version+1,updated_at=clock_timestamp() where board_id=p_board and id=p_id returning * into item;
   return next item;
 end $$;

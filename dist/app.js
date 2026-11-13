@@ -4,6 +4,8 @@ const $=id=>document.getElementById(id);
 const year=2027;
 const visibleSprints=12;
 const key='rhythm-plan-2027-v2';
+let hadLocalPlan=false,hadCloudCache=false,hasPreCloudBackup=false;
+try{hadLocalPlan=!!(localStorage.getItem(key)||localStorage.getItem('rhythm-task-v1'));hadCloudCache=!!localStorage.getItem('rhythm-cloud-'+TRACKER_CLOUD.boardId)}catch{}
 const initial={id:'TASK-001',name:'Обновление личного кабинета',product:'Личный кабинет',start:0,end:1,assignments:[{id:'ek',pct:50},{id:'my',pct:90},{id:'aa',pct:30}]};
 function validTask(t){return t&&typeof t.name==='string'&&typeof t.product==='string'&&Number.isInteger(t.start)&&Number.isInteger(t.end)&&t.start>=0&&t.end>=t.start&&t.end<24&&Array.isArray(t.assignments)}
 function cleanTask(t){const seen=new Set();return {...t,id:typeof t.id==='string'&&t.id?t.id:crypto.randomUUID(),year,assignments:t.assignments.filter(a=>a&&team.some(p=>p.id===a.id)&&Number.isFinite(a.pct)&&a.pct>=0&&a.pct<=100&&!seen.has(a.id)&&seen.add(a.id))}}
@@ -24,8 +26,8 @@ if(!tasks.some(t=>t.id===activeTaskId))activeTaskId=tasks[0]?.id??null;
 let localPlanBeforeCloud={tasks:structuredClone(tasks),trash:[],productColors:Object.fromEntries(productColors)};
 try{
   const backup=JSON.parse(localStorage.getItem('rhythm-pre-cloud-backup-2027'));
-  if(backup&&Array.isArray(backup.tasks))localPlanBeforeCloud=backup;
-  else if(localPlanBeforeCloud.tasks.length)localStorage.setItem('rhythm-pre-cloud-backup-2027',JSON.stringify(localPlanBeforeCloud));
+  if(backup&&Array.isArray(backup.tasks)){localPlanBeforeCloud=backup;hasPreCloudBackup=true;}
+  else if(hadLocalPlan&&!hadCloudCache&&localPlanBeforeCloud.tasks.length){localStorage.setItem('rhythm-pre-cloud-backup-2027',JSON.stringify(localPlanBeforeCloud));hasPreCloudBackup=true;}
 }catch{}
 let cloud=null,cloudApplying=false,cloudDeferred=false;
 let base=0,selected=0;
@@ -59,7 +61,14 @@ function visibleTask(t){return !hiddenProducts.has(productKey(t))}
 function renderProductFilters(){
   const names=[...new Set(tasks.map(productKey))];
   const signature=JSON.stringify(names.map(name=>[name,hiddenProducts.has(name)]));
-  if(signature===productFilterSignature)return;
+  if(signature===productFilterSignature){
+    for(const input of $('productFilters').querySelectorAll('[data-product-color]')){
+      const color=productColor(input.dataset.productColor);
+      if(document.activeElement!==input)input.value=color;
+      input.closest('.product-filter').style.setProperty('--product-color',color);
+    }
+    return;
+  }
   productFilterSignature=signature;
   $('productFilters').innerHTML=names.map(name=>`<div class="product-filter ${hiddenProducts.has(name)?'is-off':''}" style="--product-color:${productColor(name)}"><input type="color" class="product-color" data-product-color="${esc(name)}" value="${productColor(name)}" aria-label="Цвет продукта ${esc(name||'Без продукта')}" title="Цвет: ${esc(name||'Без продукта')}"><button class="product-toggle" data-product-toggle="${esc(name)}" aria-pressed="${!hiddenProducts.has(name)}" title="${esc(name||'Без продукта')}">${esc(name||'Без продукта')}</button></div>`).join('');
 }
@@ -271,7 +280,7 @@ renderColumnPin();
 const isLocalHost=['127.0.0.1','localhost'].includes(location.hostname);
 const migrationKey='rhythm-imported-'+TRACKER_CLOUD.boardId;
 let canMigrate=false;
-try{canMigrate=isLocalHost&&localPlanBeforeCloud.tasks.length>0&&localStorage.getItem(migrationKey)!=='true'}catch{}
+try{canMigrate=isLocalHost&&hasPreCloudBackup&&localPlanBeforeCloud.tasks.length>0&&localStorage.getItem(migrationKey)!=='true'}catch{}
 $('migrateLocalPlan').hidden=!canMigrate;
 function syncStatus(status){
   const labels={loading:'● Подключение…',saving:'● Сохраняется…',saved:'● Сохранено в общей базе',offline:'● Нет сети — изменения на устройстве',retrying:'● Нет связи с базой — повторяем'};
