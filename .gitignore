@@ -1,0 +1,8 @@
+node_modules/
+.openai/
+.env*
+*.tar.gz
+*-preview.png
+preview.png
+sprint-indicators.png
+local-backups/
