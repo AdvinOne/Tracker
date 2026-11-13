@@ -23,18 +23,18 @@ test('An empty saved board stays empty; prototype-like product names are safe',(
  const entities=new Map([['p:__proto__',{id:'p:__proto__',kind:'product',deleted:false,payload:{color:'#638bb8'}}]]);
  const result=core.toPlan(entities);assert.equal(Object.getOwnPropertyDescriptor(result.productColors,'__proto__').value,'#638bb8');
 });
-test('Reorder only within a product, preserving other product slots and sprint data after sync',()=>{
+test('Reorder only within a product, keeping product groups contiguous and sprint data after sync',()=>{
  const tasks=['a','x','b','y','c'].map((id,i)=>({...make(id),product:['x','y'].includes(id)?'Other':'Продукт',position:i*1024,start:i,end:i+1}));
  const result=core.reorderProductTasks(tasks,'c','a');
- assert.deepEqual(result.map(t=>t.id),['c','x','a','y','b']);
- assert.equal(result[1],tasks[1]);assert.equal(result[3],tasks[3]);
+ assert.deepEqual(result.map(t=>t.id),['c','a','b','x','y']);
+ assert.deepEqual(result.filter(t=>t.product==='Other').map(t=>t.id),['x','y']);
  for(const task of result){const old=tasks.find(t=>t.id===task.id);assert.equal(task.start,old.start);assert.equal(task.end,old.end);assert.deepEqual(task.assignments,old.assignments);}
  const server=core.toEntities({tasks,trash:[],productColors:{}});
  const operations=core.diffEntities(server,core.toEntities({tasks:result,trash:[],productColors:{}}));
- assert.ok(operations.every(op=>!['t:x','t:y'].includes(op.id)&&op.patches.every(p=>p.path[0]==='position')));
+ assert.ok(operations.every(op=>op.patches.every(p=>p.path[0]==='position')));
  for(const op of operations)core.applyOperation(server,op);
  assert.deepEqual(core.toPlan(server).tasks.map(t=>t.id),result.map(t=>t.id));
- assert.deepEqual(core.reorderProductTasks(result,'c','b',true).map(t=>t.id),tasks.map(t=>t.id));
+ assert.deepEqual(core.reorderProductTasks(result,'c','b',true).map(t=>t.id),['a','b','c','x','y']);
  assert.equal(core.reorderProductTasks(tasks,'a','x'),tasks);
  assert.equal(core.reorderProductTasks(tasks,'a','a'),tasks);
  assert.equal(core.reorderProductTasks(tasks,'missing','a'),tasks);
@@ -42,5 +42,16 @@ test('Reorder only within a product, preserving other product slots and sprint d
 test('Reordering handles unassigned products and legacy missing or duplicate positions',()=>{
  const tasks=[{...make('a'),product:' '},{...make('x'),product:'Other'},{...make('b'),product:''}];
  const result=core.reorderProductTasks(tasks,'a','b',true);
- assert.deepEqual(core.toPlan(core.toEntities({tasks:result})).tasks.map(t=>t.id),['b','x','a']);
+ assert.deepEqual(core.toPlan(core.toEntities({tasks:result})).tasks.map(t=>t.id),['b','a','x']);
+});
+
+test('A late new task joins its earlier product group on load without replacing any task',()=>{
+ const tasks=['a','b','x','y','new'].map((id,i)=>({...make(id),product:['x','y'].includes(id)?'Other':'Продукт',position:i*1024}));
+ const result=core.toPlan(core.toEntities({tasks})).tasks;
+ assert.deepEqual(result.map(t=>t.id),['a','b','new','x','y']);
+ assert.equal(new Set(result.map(t=>t.id)).size,5);
+ const moved=core.reorderProductTasks(result,'new','a');
+ assert.deepEqual(core.toPlan(core.toEntities({tasks:moved})).tasks.map(t=>t.id),['new','a','b','x','y']);
+ const changed=tasks.map(t=>t.id==='y'?{...t,product:'Продукт'}:t);
+ assert.deepEqual(core.groupProductTasks(changed).map(t=>t.id),['a','b','y','new','x']);
 });

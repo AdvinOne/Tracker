@@ -50,24 +50,22 @@
     }
     tasks.sort((a,b)=>a.position-b.position||a.id.localeCompare(b.id));
     trash.sort((a,b)=>a.deletedAt.localeCompare(b.deletedAt));
-    return {tasks,trash,productColors};
+    return {tasks:groupProductTasks(tasks),trash,productColors};
   }
-  // Keep other products in their slots, including when products are interleaved.
+  function groupProductTasks(tasks){
+    const products=new Map();
+    for(const task of tasks){const key=task.product.trim();if(!products.has(key))products.set(key,[]);products.get(key).push(task);}
+    return [...products.values()].flat();
+  }
   function reorderProductTasks(tasks,sourceId,targetId,after=false){
     const source=tasks.find(t=>t.id===sourceId),target=tasks.find(t=>t.id===targetId);
     if(!source||!target||source===target||source.product.trim()!==target.product.trim())return tasks;
-    const product=source.product.trim(),siblings=tasks.filter(t=>t.product.trim()===product);
-    const reordered=siblings.filter(t=>t.id!==sourceId);
+    const grouped=groupProductTasks(tasks),reordered=grouped.filter(t=>t.id!==sourceId);
     reordered.splice(reordered.findIndex(t=>t.id===targetId)+(after?1:0),0,source);
-    if(reordered.every((t,i)=>t===siblings[i]))return tasks;
-    const orderedPositions=tasks.every((t,i)=>Number.isFinite(t.position)&&(!i||t.position>tasks[i-1].position));
-    let siblingIndex=0;
-    return tasks.map((t,i)=>{
-      const next=t.product.trim()===product?reordered[siblingIndex++]:t;
-      const position=orderedPositions?t.position:i*1024;
-      return next===t&&next.position===position?t:{...next,position};
-    });
+    if(reordered.every((t,i)=>t===tasks[i]))return tasks;
+    // Persist the entire contiguous order so a refresh cannot split product groups.
+    return reordered.map((t,i)=>t.position===i*1024?t:{...t,position:i*1024});
   }
-  const api={toEntities,diffEntities,applyOperation,toPlan,reorderProductTasks};
+  const api={toEntities,diffEntities,applyOperation,toPlan,groupProductTasks,reorderProductTasks};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.TrackerSyncCore=api;
 })(globalThis);
