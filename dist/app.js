@@ -412,8 +412,18 @@ $('migrateLocalPlan').onclick=()=>{
 };
 if(window.TRACKER_CLOUD&&window.SharedTracker){
   document.querySelector('main').inert=true;
-  cloud=new SharedTracker(TRACKER_CLOUD,applyCloudPlan,syncStatus);
-  cloud.start();
+  trackerAuthReady.then(()=>{
+    cloud=new SharedTracker(TRACKER_CLOUD,applyCloudPlan,syncStatus);
+    cloud.start();
+  });
+  window.addEventListener('tracker-auth-lost',()=>{cloud?.stop();document.querySelector('main').hidden=true;});
+  $('logoutButton').onclick=async()=>{
+    $('logoutButton').disabled=true;
+    try{
+      if(cloud?.pending.length){await cloud.flush();if(cloud.pending.length)throw new Error('Дождитесь сохранения изменений перед выходом.');}
+      await window.trackerSignOut();
+    }catch(error){$('saveState').textContent=error.message;$('logoutButton').disabled=false;}
+  };
 }else{
   $('saveState').textContent='Общая база не подключена';
 }
