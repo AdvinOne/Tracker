@@ -40,7 +40,11 @@ const short=['янв','фев','мар','апр','мая','июн','июл','а�
 function sprintText(i){return `${i%2?'16–'+new Date(year,Math.floor(i/2)+1,0).getDate():'1–15'} ${short[Math.floor(i/2)]} · С${i+1}`}
 function persist(){
   try{localStorage.setItem(key,JSON.stringify({year,tasks,trash,activeTaskId,productColors:Object.fromEntries(productColors),hiddenProducts:[...hiddenProducts]}))}catch{}
-  if(cloud&&!cloudApplying)cloud.capture({tasks,trash,productColors:Object.fromEntries(productColors)});
+  if(cloud&&!cloudApplying){
+    const input=document.activeElement,row=input?.closest('[data-task-id]');
+    cloud.actionKey=input?.dataset.field?`task:${row?.dataset.taskId}:${input.dataset.field}`:input?.dataset.kind?`allocation:${activeTaskId}:${input.closest('[data-person]')?.dataset.person}`:input?.dataset.productColor!==undefined?`color:${input.dataset.productColor}`:null;
+    cloud.capture({tasks,trash,productColors:Object.fromEntries(productColors)});
+  }
 }
 function save(){persist();renderDerived()}
 function loadTone(pct){
@@ -370,7 +374,9 @@ function syncStatus(status){
   const labels={loading:'● Подключение…',saving:'● Сохраняется…',saved:'● Сохранено в общей базе',offline:'● Нет сети — изменения на устройстве',retrying:'● Нет связи с базой — повторяем'};
   $('saveState').textContent=labels[status]||labels.loading;
   $('saveState').dataset.status=status;
-  if(cloud?.ready)document.querySelector('main').inert=false;
+  if(cloud?.ready&&!cloud.undoing)document.querySelector('main').inert=false;
+  $('undoAction').disabled=!cloud?.history.peek()||!!cloud?.undoing;
+
 }
 function applyCloudPlan(plan){
   if(drag||rowDrag){cloudDeferred=true;return false;}
@@ -427,3 +433,26 @@ if(window.TRACKER_CLOUD&&window.SharedTracker){
 }else{
   $('saveState').textContent='Общая база не подключена';
 }
+
+let undoNoticeTimer;
+function showUndoNotice(message){
+  $('undoNotice').textContent=message;$('undoNotice').hidden=false;
+  clearTimeout(undoNoticeTimer);undoNoticeTimer=setTimeout(()=>$('undoNotice').hidden=true,4000);
+}
+async function undoLastAction(){
+  if(!cloud||cloud.undoing||drag||rowDrag)return;
+  document.querySelector('main').inert=true;$('undoAction').disabled=true;
+  try{
+    const result=await cloud.undo();
+    const messages={undone:'Действие отменено',empty:'Нет действий для отмены',conflict:'Отмена пропущена: эти данные уже изменились',offline:'Не удалось отменить. Проверьте связь и попробуйте снова.'};
+    if(messages[result])showUndoNotice(messages[result]);
+  }finally{document.querySelector('main').inert=!cloud?.ready;$('undoAction').disabled=!cloud?.history.peek();}
+}
+$('undoAction').onclick=undoLastAction;
+document.addEventListener('keydown',e=>{
+  if(!(e.ctrlKey||e.metaKey)||e.altKey||e.shiftKey||e.code!=='KeyZ'||e.repeat)return;
+  if(e.target.closest('input:not([type="range"]):not([type="color"]),textarea,select,[contenteditable="true"]'))return;
+  if(document.querySelector('main').hidden)return;
+  e.preventDefault();undoLastAction();
+});
+for(const event of ['change','focusin','pointerdown'])document.addEventListener(event,()=>cloud?.endAction());

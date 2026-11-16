@@ -244,3 +244,5 @@ body.reordering-task,body.reordering-task *{cursor:grabbing!important;user-selec
 .auth-card button:disabled{opacity:.6;cursor:wait}
 .auth-card #authError{color:#a44839;font-size:12px;line-height:1.5;margin:0 0 14px}
 .signed-in-name{font-size:10px;color:#6c7c65}.logout-button{font-size:10px;border-right:1px solid #e1e7dc;padding-right:10px}
+
+.undo-notice{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:110;padding:10px 16px;border-radius:6px;background:#24372e;color:#fff;font-size:12px;box-shadow:0 4px 18px #24372e20;max-width:90vw}

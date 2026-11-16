@@ -4,7 +4,7 @@
     constructor(config,onChange,onStatus){
       this.config=config;this.onChange=onChange;this.onStatus=onStatus;
       this.client=root.trackerClient;
-      this.stopped=false;
+      this.stopped=false;this.undoing=false;this.history=new core.UndoHistory(5);this.actionKey=null;
       this.storageKey='rhythm-cloud-'+config.boardId;
       this.entities=new Map();this.pending=[];this.ready=false;this.flushing=false;this.failure=0;this.refreshing=null;this.lastSuccess=0;
       try{const saved=JSON.parse(localStorage.getItem(this.storageKey));if(saved){this.entities=new Map(saved.entities||[]);this.pending=saved.pending||[]}}catch{}
@@ -15,13 +15,32 @@
     emit(){if(this.stopped)return;const next=this.overlay();if(this.onChange(core.toPlan(next))!==false)this.localView=next;this.cache();}
     status(){this.onStatus(!navigator.onLine?'offline':this.failure?'retrying':this.pending.length?'saving':'saved');}
     capture(plan){
-      if(!this.ready||this.stopped)return;
+      if(!this.ready||this.stopped||this.undoing)return;
       const next=core.toEntities(plan),ops=core.diffEntities(this.localView,next);
       if(!ops.length){this.status();return;}
+      this.history.record(this.localView,next,this.actionKey);
       for(const op of ops){op.operation=crypto.randomUUID();this.pending.push(op);}
       this.localView=next;this.cache();this.status();clearTimeout(this.flushTimer);this.flushTimer=setTimeout(()=>this.flush(),220);
     }
-    async flush(){
+    endAction(){this.actionKey=null;this.history.end();}
+    flush(){
+      if(this.flushTask)return this.flushTask;
+      this.flushTask=this.runFlush().finally(()=>{this.flushTask=null;});return this.flushTask;
+    }
+    async undo(){
+      if(this.undoing||!this.ready||this.stopped)return 'busy';
+      const entry=this.history.peek();if(!entry)return 'empty';
+      this.endAction();this.undoing=true;
+      try{
+        await this.flush();if(this.pending.length)return 'offline';
+        entry.operation??=crypto.randomUUID();for(const change of entry.changes)change.operation??=crypto.randomUUID();
+        const {data,error}=await this.client.rpc('tracker_undo',{p_board:this.config.boardId,p_operation:entry.operation,p_changes:entry.changes});
+        if(error){if(error.message?.includes('UNDO_CONFLICT')){this.history.pop();await this.refresh();return 'conflict';}throw error;}
+        for(const entity of data||[]){const previous=this.entities.get(entity.id);if(!previous||entity.version>=previous.version)this.entities.set(entity.id,entity);}
+        this.history.pop();this.emit();this.status();return 'undone';
+      }catch{return 'offline';}finally{this.undoing=false;}
+    }
+    async runFlush(){
       if(this.flushing||!this.ready||this.stopped)return;this.flushing=true;
       try{
         while(this.pending.length&&!this.stopped){

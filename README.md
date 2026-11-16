@@ -46,3 +46,11 @@ Supabase Auth проверяет индивидуальный пароль. В �
 Кнопка «Выйти» завершает сессию этого браузера и очищает локальный кэш плана. При несохранённых правках выход ждёт их отправки. Сессии в других браузерах сохраняются; для отключения участника удалите его запись из tracker_members и отзовите его сессии в Supabase. Любые сторонние регистрации не дают доступа к данным.
 
 database/auth-access.sql содержит применённое ограничение доступа. Полный database/schema.sql уже включает его для новой базы. Файл с начальными паролями хранится отдельно на личном Google Диске владельца и в репозиторий не включается.
+
+## Undo
+
+Ctrl+Z / Command+Z and the Undo button reverse up to five own actions in the current tab. History is separate for each open session and cleared on reload or logout. Typing and a continuous slider interaction count as one action. Text fields retain native browser undo. View settings and filters are excluded.
+
+Undo waits for prior changes to save, then tracker_undo locks affected rows and compares the edited fields (the full payload for create/delete). A conflict skips the entire action; unrelated fields edited by collaborators survive. Retrying an undo request is idempotent. Offline undo is retained for retry. The restore-deleted-task button also creates an own action.
+
+Run npm test for history and sync tests. tests/undo-access.sql tests atomic conflicts, independent fields, idempotent retries and access under member RLS; all its test records are rolled back.

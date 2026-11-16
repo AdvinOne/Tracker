@@ -66,6 +66,45 @@
     // Persist the entire contiguous order so a refresh cannot split product groups.
     return reordered.map((t,i)=>t.position===i*1024?t:{...t,position:i*1024});
   }
-  const api={toEntities,diffEntities,applyOperation,toPlan,groupProductTasks,reorderProductTasks};
+  const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  function pathValue(entity,path){return path.reduce((value,key)=>value?.[key],entity?.payload);}
+  function undoChanges(before,after){
+    return diffEntities(before,after).map(op=>{
+      const old=before.get(op.id),next=after.get(op.id),lifecycle=!old||old.deleted!==next.deleted;
+      const inverse=op.patches.map(p=>{const value=pathValue(old,p.path);return value===undefined?{path:p.path,remove:true}:{path:p.path,value};});
+      return {id:op.id,kind:op.kind,expected_deleted:next.deleted,
+        ...(lifecycle?{expected_payload:structuredClone(next.payload)}:{}),
+        checks:lifecycle?[]:op.patches.map(p=>{const value=pathValue(next,p.path);return value===undefined?{path:p.path,missing:true}:{path:p.path,value};}),
+        action:!old?'delete':old.deleted?'delete':next.deleted?'restore':'patch',patches:!old?[]:inverse};
+    });
+  }
+  class UndoHistory {
+    constructor(limit=5){this.limit=limit;this.entries=[];this.key=null;}
+    end(){this.key=null;}
+    record(before,after,key=null){
+      const changes=undoChanges(before,after);if(!changes.length)return;
+      const last=this.entries.at(-1);
+      const canMerge=key&&key===this.key&&last&&!last.operation&&changes.every(change=>{
+        const previous=last.changes.find(c=>c.id===change.id);
+        return !change.expected_payload&&(!previous||(!previous.expected_payload&&previous.checks.every(check=>{
+          const value=pathValue(before.get(change.id),check.path);return check.missing?value===undefined:equal(value,check.value);
+        })));
+      });
+      if(canMerge){
+        for(const change of changes){
+          const previous=last.changes.find(c=>c.id===change.id);
+          if(!previous){last.changes.push(change);continue;}
+          for(let i=0;i<change.checks.length;i++){
+            const check=change.checks[i],index=previous.checks.findIndex(c=>equal(c.path,check.path));
+            if(index<0){previous.checks.push(check);previous.patches.push(change.patches[i]);}else previous.checks[index]=check;
+          }
+        }
+      }else{this.entries.push({changes});if(this.entries.length>this.limit)this.entries.shift();}
+      this.key=key;
+    }
+    peek(){return this.entries.at(-1);}
+    pop(){this.key=null;return this.entries.pop();}
+  }
+  const api={toEntities,diffEntities,applyOperation,toPlan,groupProductTasks,reorderProductTasks,UndoHistory,undoChanges};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.TrackerSyncCore=api;
 })(globalThis);
