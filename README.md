@@ -49,9 +49,9 @@ database/auth-access.sql содержит применённое огранич�
 
 ## Undo
 
-Ctrl+Z / Command+Z and the Undo button reverse up to five own actions in the current tab. History is separate for each open session and cleared on reload or logout. Typing and a continuous slider interaction count as one action. Text fields retain native browser undo. View settings and filters are excluded.
+Ctrl+Z / Command+Z reverse up to five own actions in the current tab. History is separate for each open session and cleared on reload or logout. Typing and a continuous slider interaction count as one action. Text fields retain native browser undo. View settings and filters are excluded.
 
-Undo waits for prior changes to save, then tracker_undo locks affected rows and compares the edited fields (the full payload for create/delete). A conflict skips the entire action; unrelated fields edited by collaborators survive. Retrying an undo request is idempotent. Offline undo is retained for retry. The restore-deleted-task button also creates an own action.
+Undo waits for prior changes to save, then tracker_undo locks affected rows and compares the edited fields (the full payload for create/delete). A conflict skips the entire action; unrelated fields edited by collaborators survive. Retrying an undo request is idempotent. Offline undo is retained for retry.
 
 Run npm test for history and sync tests. tests/undo-access.sql tests atomic conflicts, independent fields, idempotent retries and access under member RLS; all its test records are rolled back.
 
@@ -64,3 +64,6 @@ For an existing database apply database/product-info.sql once. npm test covers m
 
 
 Timeline multi-selection is personal and temporary. Click a task, then Shift-click another to include the visible range; Ctrl/⌘-click toggles individual tasks. Drag any selected bar or use ←/→ to move the group by the same sprint offset. Durations and gaps are preserved, with the whole group clamped at the year boundaries. Handles resize only the grabbed task. Esc cancels an active drag or clears selection; the selection badge also clears it. Hidden/deleted tasks leave the selection. A completed move is captured once for shared saving and one conditional undo action. Left-column reordering remains per task within one product.
+
+
+The toolbar has no Undo or Restore buttons; Ctrl/⌘+Z remains available, including undoing deletion within the last five own actions. Team load and assignees start collapsed and can be expanded by their headings. Their expanded/collapsed states are personal browser preferences.

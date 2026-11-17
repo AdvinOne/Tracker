@@ -134,7 +134,7 @@ function renderRows(){
   $('taskRows').innerHTML=tasks.map(t=>`<div class="task-row ${t.id===activeTaskId?'is-active':''}" data-task-id="${esc(t.id)}"><div class="task-info"><button class="task-reorder" aria-label="Изменить порядок задачи ${esc(t.name||'Без названия')}" title="Перетащить в пределах продукта · Alt + ↑/↓">⠿</button><input class="task-name" data-field="name" aria-label="Название задачи" maxlength="120" value="${esc(t.name)}"><div class="product-line"><span class="product-dot"></span><input data-field="product" aria-label="Продукт" placeholder="Продукт" maxlength="80" value="${esc(t.product)}"><span class="unassigned-label" hidden>Не назначено</span></div><button class="delete-task" data-delete aria-label="Удалить задачу ${esc(t.name||'Без названия')}" title="Удалить задачу">×</button></div><div class="track"><div class="grid">${Array.from({length:visibleSprints},(_,j)=>`<div class="${base+j===selected?'selected':''}"></div>`).join('')}</div><div class="task-bar" tabindex="0" role="slider" aria-label="Положение задачи ${esc(t.name||'Без названия')}"><div class="resize-handle left" data-edge="left"></div><div class="bar-content"><span class="bar-symbol">▤</span><strong class="bar-name"></strong><span class="bar-unassigned" hidden title="Исполнитель не назначен" aria-label="Исполнитель не назначен">!</span><span class="bar-duration"></span></div><div class="resize-handle right" data-edge="right"></div></div><div class="empty-plan" hidden>В другом периоде</div></div></div>`).join('');
   $('emptyTasks').hidden=tasks.length>0;
   $('taskCount').textContent=String(tasks.length);
-  $('undoDelete').disabled=trash.length===0;
+
 }
 function renderProductSummaries(){
   const container=$('taskRows');
@@ -257,12 +257,7 @@ function deleteTask(id){
   if(activeTaskId===id)activeTaskId=tasks[Math.min(index,tasks.length-1)]?.id??null;ensureVisibleSelection();
   $('personPicker').hidden=true;renderRows();renderAllocations();persist();
 }
-function undoDelete(){
-  const entry=trash.pop();if(!entry)return;
-  hiddenProducts.delete(productKey(entry.task));tasks.splice(Math.min(entry.index,tasks.length),0,entry.task);activeTaskId=entry.task.id;
-  renderRows();renderAllocations();persist();
-}
-$('addTask').onclick=addTask;$('emptyTasks').onclick=addTask;$('undoDelete').onclick=undoDelete;
+$('addTask').onclick=addTask;$('emptyTasks').onclick=addTask;
 $('taskRows').addEventListener('click',e=>{const row=e.target.closest('[data-task-id]');if(!row)return;if(e.target.closest('[data-delete]')){deleteTask(row.dataset.taskId);return;}selectTask(row.dataset.taskId)});
 $('taskRows').addEventListener('focusin',e=>{const row=e.target.closest('[data-task-id]');if(row)selectTask(row.dataset.taskId)});
 $('taskRows').addEventListener('input',e=>{const field=e.target.dataset.field;if(!field)return;const t=tasks.find(t=>t.id===e.target.closest('[data-task-id]').dataset.taskId);t[field]=e.target.value;save()});
@@ -441,8 +436,21 @@ document.addEventListener('keydown',e=>{
 new ResizeObserver(()=>applyZoom(false)).observe(sheetScroll);
 applyZoom(false);
 
-let assigneesCollapsed=false;
-try{assigneesCollapsed=localStorage.getItem('rhythm-assignees-collapsed')==='true'}catch{}
+let teamLoadCollapsed=true;
+try{teamLoadCollapsed=localStorage.getItem('rhythm-team-load-collapsed')!=='false'}catch{}
+function renderTeamLoadCollapse(){
+  $('teamLoadBody').hidden=teamLoadCollapsed;
+  $('toggleTeamLoad').setAttribute('aria-expanded',String(!teamLoadCollapsed));
+  document.querySelector('.overview').classList.toggle('is-collapsed',teamLoadCollapsed);
+}
+$('toggleTeamLoad').addEventListener('click',()=>{
+  teamLoadCollapsed=!teamLoadCollapsed;renderTeamLoadCollapse();
+  try{localStorage.setItem('rhythm-team-load-collapsed',String(teamLoadCollapsed))}catch{}
+});
+renderTeamLoadCollapse();
+
+let assigneesCollapsed=true;
+try{assigneesCollapsed=localStorage.getItem('rhythm-assignees-collapsed-v2')!=='false'}catch{}
 function renderAssigneeCollapse(){
   $('assigneesBody').hidden=assigneesCollapsed;
   $('toggleAssignees').setAttribute('aria-expanded',String(!assigneesCollapsed));
@@ -451,7 +459,7 @@ function renderAssigneeCollapse(){
 }
 document.querySelector('.detail-heading').addEventListener('click',()=>{
   assigneesCollapsed=!assigneesCollapsed;renderAssigneeCollapse();
-  try{localStorage.setItem('rhythm-assignees-collapsed',String(assigneesCollapsed))}catch{}
+  try{localStorage.setItem('rhythm-assignees-collapsed-v2',String(assigneesCollapsed))}catch{}
 });
 renderAssigneeCollapse();
 
@@ -482,7 +490,6 @@ function syncStatus(status){
   $('saveState').dataset.status=status;
   productInfo.status(labels[status]||labels.loading);
   if(cloud?.ready&&!cloud.undoing)document.querySelector('main').inert=false;
-  $('undoAction').disabled=!cloud?.history.peek()||!!cloud?.undoing;
 
 }
 function applyCloudPlan(plan){
@@ -505,7 +512,7 @@ function applyCloudPlan(plan){
     }
     const editingAllocation=$('allocations').contains(document.activeElement);
     if(!editingAllocation)renderAllocations();else renderDerived();
-    $('undoDelete').disabled=trash.length===0;
+
     persist();
   }finally{cloudApplying=false;}
   return true;
@@ -551,14 +558,13 @@ function showUndoNotice(message){
 }
 async function undoLastAction(){
   if(!cloud||cloud.undoing||drag||rowDrag)return;
-  document.querySelector('main').inert=true;$('undoAction').disabled=true;
+  document.querySelector('main').inert=true;
   try{
     const result=await cloud.undo();
     const messages={undone:'Действие отменено',empty:'Нет действий для отмены',conflict:'Отмена пропущена: эти данные уже изменились',offline:'Не удалось отменить. Проверьте связь и попробуйте снова.'};
     if(messages[result])showUndoNotice(messages[result]);
-  }finally{document.querySelector('main').inert=!cloud?.ready;$('undoAction').disabled=!cloud?.history.peek();}
+  }finally{document.querySelector('main').inert=!cloud?.ready;}
 }
-$('undoAction').onclick=undoLastAction;
 document.addEventListener('keydown',e=>{
   if(!(e.ctrlKey||e.metaKey)||e.altKey||e.shiftKey||e.code!=='KeyZ'||e.repeat)return;
   if(e.target.closest('input:not([type="range"]):not([type="color"]),textarea,select,[contenteditable="true"]'))return;

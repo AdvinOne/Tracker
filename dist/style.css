@@ -282,3 +282,14 @@ body.reordering-task,body.reordering-task *{cursor:grabbing!important;user-selec
 .task-row.is-multiselected .task-bar{outline:2px solid #6182b2;outline-offset:1px}
 .task-row.is-multiselected .grid{background:#6182b209}
 .selection-count{border:1px solid #d5dfed;border-radius:4px;background:#edf3fa;color:#4c6b99;padding:3px 7px;font-size:9px;white-space:nowrap}
+
+/* Both supporting panels start folded, leaving the timeline in focus. */
+.overview-heading{display:flex;align-items:center;margin-bottom:6px}
+.overview-heading h2{font-size:11px;font-weight:600;margin:0}
+.overview-heading #teamCount{font-size:9px;font-weight:400;color:#949c91;margin-left:5px}
+.overview.is-collapsed{padding-top:5px;padding-bottom:5px}
+.overview.is-collapsed .overview-heading{margin-bottom:0}
+.overview.is-collapsed .detail-chevron{transform:rotate(-90deg)}
+#teamLoadBody{display:flex;gap:12px;min-width:0}
+#teamLoadBody>.section-title{width:130px;flex:none;display:block;padding-top:3px}
+#teamLoadBody>.summary-body{flex:1;min-width:0}
