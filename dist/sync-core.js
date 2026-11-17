@@ -6,7 +6,12 @@
     }
     (plan.trash||[]).forEach((entry,index)=>result.set('t:'+entry.task.id,taskEntity(entry.task,entry.index??index,true)));
     plan.tasks.forEach((task,index)=>result.set('t:'+task.id,taskEntity(task,index,false)));
-    for(const [name,color] of Object.entries(plan.productColors||{}))result.set('p:'+name,{id:'p:'+name,kind:'product',deleted:false,payload:{color}});
+    for(const name of new Set([...Object.keys(plan.productColors||{}),...Object.keys(plan.productDetails||{})])){
+      const payload={color:Object.hasOwn(plan.productColors||{},name)?plan.productColors[name]:'#739653'};
+      const details=Object.hasOwn(plan.productDetails||{},name)?plan.productDetails[name]:{};
+      for(const field of ['description','result'])if(typeof details?.[field]==='string')payload[field]=details[field];
+      result.set('p:'+name,{id:'p:'+name,kind:'product',deleted:false,payload});
+    }
     return result;
   }
   function diffEntities(before,after){
@@ -40,9 +45,17 @@
     entities.set(item.id,item);return entities;
   }
   function toPlan(entities){
-    const tasks=[],trash=[],productColors={};
+    const tasks=[],trash=[],productColors={},productDetails={};
     for(const entity of entities.values()){
-      if(entity.kind==='product'){if(!entity.deleted&&/^#[0-9a-f]{6}$/i.test(entity.payload.color))Object.defineProperty(productColors,entity.id.slice(2),{value:entity.payload.color,enumerable:true,configurable:true});continue;}
+      if(entity.kind==='product'){
+        if(!entity.deleted){
+          const name=entity.id.slice(2),details={};
+          if(/^#[0-9a-f]{6}$/i.test(entity.payload.color))Object.defineProperty(productColors,name,{value:entity.payload.color,enumerable:true,configurable:true});
+          for(const field of ['description','result'])if(typeof entity.payload[field]==='string')details[field]=entity.payload[field];
+          if(Object.keys(details).length)Object.defineProperty(productDetails,name,{value:details,enumerable:true,configurable:true});
+        }
+        continue;
+      }
       const p=entity.payload;
       if(typeof p.name!=='string'||typeof p.product!=='string'||!Number.isInteger(p.start)||!Number.isInteger(p.end)||p.start<0||p.end<p.start||p.end>23||!p.assignments||typeof p.assignments!=='object')continue;
       const task={id:entity.id.slice(2),year:2027,name:p.name,product:p.product,start:p.start,end:p.end,position:p.position||0,assignments:Object.entries(p.assignments).filter(([id,pct])=>Number.isFinite(pct)&&pct>=0&&pct<=100).map(([id,pct])=>({id,pct}))};
@@ -50,7 +63,7 @@
     }
     tasks.sort((a,b)=>a.position-b.position||a.id.localeCompare(b.id));
     trash.sort((a,b)=>a.deletedAt.localeCompare(b.deletedAt));
-    return {tasks:groupProductTasks(tasks),trash,productColors};
+    return {tasks:groupProductTasks(tasks),trash,productColors,productDetails};
   }
   function groupProductTasks(tasks){
     const products=new Map();

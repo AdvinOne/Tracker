@@ -56,3 +56,8 @@ Undo waits for prior changes to save, then tracker_undo locks affected rows and 
 Run npm test for history and sync tests. tests/undo-access.sql tests atomic conflicts, independent fields, idempotent retries and access under member RLS; all its test records are rolled back.
 
 Product summary rows are read-only and derived from tasks: one thin colored bar per product spans the earliest task start through the latest task end, including gaps. They follow product filters and colors, update during task moves, and never add assignments or team load.
+
+
+Product summary ⓘ opens shared Description and Result rich-text fields. Bold, http/https/mailto links, ordered and bullet lists are supported; Ctrl/⌘+click opens a link while editing. Text autosaves as independent optional fields in the existing product entity. Old color-only clients preserve it. Rendering and rich paste use a strict tag and URL allowlist; images, styles, scripts and event attributes are discarded. Each field is limited to 24 KB of serialized text. Active editors keep their caret during remote refresh; concurrent edits to the same field follow the existing last-server-write rule.
+
+For an existing database apply database/product-info.sql once. npm test covers metadata roundtrip, concurrent fields, legacy clients and optional-field undo. tests/product-info-access.sql validates the member RPC and rolls back all fixtures.

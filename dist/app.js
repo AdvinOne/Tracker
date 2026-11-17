@@ -10,7 +10,7 @@ const initial={id:'TASK-001',name:'Обновление личного каби�
 function validTask(t){return t&&typeof t.name==='string'&&typeof t.product==='string'&&Number.isInteger(t.start)&&Number.isInteger(t.end)&&t.start>=0&&t.end>=t.start&&t.end<24&&Array.isArray(t.assignments)}
 function cleanTask(t){const seen=new Set();return {...t,id:typeof t.id==='string'&&t.id?t.id:crypto.randomUUID(),year,assignments:t.assignments.filter(a=>a&&team.some(p=>p.id===a.id)&&Number.isFinite(a.pct)&&a.pct>=0&&a.pct<=100&&!seen.has(a.id)&&seen.add(a.id))}}
 let tasks=[],trash=[],activeTaskId=null;
-let productColors=new Map(),hiddenProducts=new Set();
+let productColors=new Map(),productDetails=new Map(),hiddenProducts=new Set();
 let productFilterSignature='';
 try{
   const saved=JSON.parse(localStorage.getItem(key));
@@ -19,11 +19,12 @@ try{
     trash=Array.isArray(saved.trash)?saved.trash.filter(x=>validTask(x.task)).map(x=>({...x,task:cleanTask(x.task)})):[];
     activeTaskId=saved.activeTaskId;
     if(saved.productColors&&typeof saved.productColors==='object')productColors=new Map(Object.entries(saved.productColors).filter(([k,v])=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v)));
+    if(saved.productDetails&&typeof saved.productDetails==='object')productDetails=new Map(Object.entries(saved.productDetails));
     if(Array.isArray(saved.hiddenProducts))hiddenProducts=new Set(saved.hiddenProducts.filter(p=>typeof p==='string'));
   }else{const legacy=JSON.parse(localStorage.getItem('rhythm-task-v1'));tasks=[cleanTask(validTask(legacy)?{...legacy,id:'TASK-001'}:structuredClone(initial))]}
 }catch{tasks=[cleanTask(structuredClone(initial))]}
 if(!tasks.some(t=>t.id===activeTaskId))activeTaskId=tasks[0]?.id??null;
-let localPlanBeforeCloud={tasks:structuredClone(tasks),trash:[],productColors:Object.fromEntries(productColors)};
+let localPlanBeforeCloud={tasks:structuredClone(tasks),trash:[],productColors:Object.fromEntries(productColors),productDetails:Object.fromEntries(productDetails)};
 try{
   const backup=JSON.parse(localStorage.getItem('rhythm-pre-cloud-backup-2027'));
   if(backup&&Array.isArray(backup.tasks)){localPlanBeforeCloud=backup;hasPreCloudBackup=true;}
@@ -39,11 +40,11 @@ const months=['Январь','Февраль','Март','Апрель','Май'
 const short=['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
 function sprintText(i){return `${i%2?'16–'+new Date(year,Math.floor(i/2)+1,0).getDate():'1–15'} ${short[Math.floor(i/2)]} · С${i+1}`}
 function persist(){
-  try{localStorage.setItem(key,JSON.stringify({year,tasks,trash,activeTaskId,productColors:Object.fromEntries(productColors),hiddenProducts:[...hiddenProducts]}))}catch{}
+  try{localStorage.setItem(key,JSON.stringify({year,tasks,trash,activeTaskId,productColors:Object.fromEntries(productColors),productDetails:Object.fromEntries(productDetails),hiddenProducts:[...hiddenProducts]}))}catch{}
   if(cloud&&!cloudApplying){
     const input=document.activeElement,row=input?.closest('[data-task-id]');
-    cloud.actionKey=input?.dataset.field?`task:${row?.dataset.taskId}:${input.dataset.field}`:input?.dataset.kind?`allocation:${activeTaskId}:${input.closest('[data-person]')?.dataset.person}`:input?.dataset.productColor!==undefined?`color:${input.dataset.productColor}`:null;
-    cloud.capture({tasks,trash,productColors:Object.fromEntries(productColors)});
+    cloud.actionKey=input?.dataset.infoField?`product:${productInfo.product}:${input.dataset.infoField}`:input?.dataset.field?`task:${row?.dataset.taskId}:${input.dataset.field}`:input?.dataset.kind?`allocation:${activeTaskId}:${input.closest('[data-person]')?.dataset.person}`:input?.dataset.productColor!==undefined?`color:${input.dataset.productColor}`:null;
+    cloud.capture({tasks,trash,productColors:Object.fromEntries(productColors),productDetails:Object.fromEntries(productDetails)});
   }
 }
 function save(){persist();renderDerived()}
@@ -150,14 +151,16 @@ function renderProductSummaries(){
     let row=headers.get(summary.product);
     if(!row){
       row=document.createElement('div');row.className='product-summary';row.dataset.productSummary=summary.product;
-      row.innerHTML='<div class="product-summary-label"></div><div class="track"><div class="grid"></div><div class="product-summary-bar" role="img"><span></span></div></div>';
+      row.innerHTML='<div class="product-summary-label"><span class="product-summary-name"></span><button type="button" class="product-info-button">ⓘ</button></div><div class="track"><div class="grid"></div><div class="product-summary-bar" role="img"><span></span></div></div>';
     }
     headers.delete(summary.product);
     const first=rows.get(summary.firstTaskId);
     if(first&&first.previousElementSibling!==row)container.insertBefore(row,first);
     row.hidden=hiddenProducts.has(summary.product);row.style.setProperty('--product-color',productColor(summary.product));
     const label=summary.product||'Без продукта';
-    row.querySelector('.product-summary-label').textContent=label;
+    row.querySelector('.product-summary-name').textContent=label;
+    const info=row.querySelector('.product-info-button');info.dataset.productInfo=summary.product;
+    info.setAttribute('aria-label',`Информация о продукте: ${label}`);info.title='Информация о продукте';
     row.querySelector('.product-summary-label').title=label;
     const grid=row.querySelector('.grid');
     if(grid.dataset.selected!==String(selected)||grid.dataset.base!==String(base)){
@@ -413,6 +416,7 @@ function syncStatus(status){
   const labels={loading:'● Подключение…',saving:'● Сохраняется…',saved:'● Сохранено в общей базе',offline:'● Нет сети — изменения на устройстве',retrying:'● Нет связи с базой — повторяем'};
   $('saveState').textContent=labels[status]||labels.loading;
   $('saveState').dataset.status=status;
+  productInfo.status(labels[status]||labels.loading);
   if(cloud?.ready&&!cloud.undoing)document.querySelector('main').inert=false;
   $('undoAction').disabled=!cloud?.history.peek()||!!cloud?.undoing;
 
@@ -425,6 +429,8 @@ function applyCloudPlan(plan){
     tasks=plan.tasks.filter(validTask).map(cleanTask);
     trash=plan.trash.filter(x=>validTask(x.task)).map(x=>({...x,task:cleanTask(x.task)}));
     productColors=new Map(Object.entries(plan.productColors));
+    productDetails=new Map(Object.entries(plan.productDetails||{}));
+    productInfo.refresh();
     ensureVisibleSelection();
     const newIds=tasks.filter(visibleTask).map(t=>t.id).join('|');
     const hasRows=[...$('taskRows').querySelectorAll('.task-row')].map(r=>r.dataset.taskId).join('|')===tasks.map(t=>t.id).join('|');
@@ -441,7 +447,7 @@ function applyCloudPlan(plan){
   return true;
 }
 $('exportPlan').onclick=()=>{
-  const plan=canMigrate?localPlanBeforeCloud:{year,tasks,trash,productColors:Object.fromEntries(productColors)};
+  const plan=canMigrate?localPlanBeforeCloud:{year,tasks,trash,productColors:Object.fromEntries(productColors),productDetails:Object.fromEntries(productDetails)};
   const url=URL.createObjectURL(new Blob([JSON.stringify(plan,null,2)],{type:'application/json'}));
   const a=document.createElement('a');a.href=url;a.download='tracker-2027-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
@@ -451,6 +457,7 @@ $('migrateLocalPlan').onclick=()=>{
   localPlanBeforeCloud.tasks.forEach((t,index)=>merged.set(t.id,{...t,position:t.position??index*1024}));
   tasks=[...merged.values()];
   for(const [name,color] of Object.entries(localPlanBeforeCloud.productColors))productColors.set(name,color);
+  for(const [name,details] of Object.entries(localPlanBeforeCloud.productDetails||{}))productDetails.set(name,details);
   activeTaskId=tasks[0]?.id??null;renderRows();renderAllocations();persist();
   canMigrate=false;$('migrateLocalPlan').hidden=true;
   try{localStorage.setItem(migrationKey,'true')}catch{}
@@ -495,3 +502,14 @@ document.addEventListener('keydown',e=>{
   e.preventDefault();undoLastAction();
 });
 for(const event of ['change','focusin','pointerdown'])document.addEventListener(event,()=>cloud?.endAction());
+
+const productInfo=new ProductInfo({
+  read:name=>productDetails.get(name)||{},
+  write:(name,field,value)=>{productDetails.set(name,{...productDetails.get(name),[field]:value});persist();},
+  end:()=>cloud?.endAction()
+});
+$('taskRows').addEventListener('click',e=>{
+  const button=e.target.closest('[data-product-info]');
+  if(button)productInfo.open(button.dataset.productInfo,button);
+});
+window.addEventListener('tracker-auth-lost',()=>productInfo.close());

@@ -49,9 +49,9 @@ begin
     path=array(select jsonb_array_elements_text(patch->'path'));
     if p_kind='task' then
       if not ((cardinality(path)=1 and path[1] in ('name','product','start','end','position')) or (cardinality(path)=2 and path[1]='assignments' and path[2] in ('sa','ak','my','aa','dg','fb','ad','as','al','ek','sg','au'))) then raise exception 'Invalid field'; end if;
-    elsif cardinality(path)<>1 or path[1]<>'color' then raise exception 'Invalid product field'; end if;
+    elsif cardinality(path)<>1 or path[1] not in ('color','description','result') then raise exception 'Invalid product field'; end if;
     if coalesce((patch->>'remove')::boolean,false) then
-      if cardinality(path)<>2 or path[1]<>'assignments' then raise exception 'Required field cannot be removed'; end if;
+      if not ((p_kind='task' and cardinality(path)=2 and path[1]='assignments') or (p_kind='product' and cardinality(path)=1 and path[1] in ('description','result'))) then raise exception 'Required field cannot be removed'; end if;
       doc=doc #- path;
     else doc=jsonb_set(doc,path,patch->'value',true); end if;
   end loop;
@@ -61,6 +61,11 @@ begin
       if jsonb_typeof(member.value)<>'number' or (member.value::text)::numeric not between 0 and 100 then raise exception 'Invalid allocation'; end if;
     end loop;
   elsif jsonb_typeof(doc->'color') is distinct from 'string' or (doc->>'color') !~ '^#[0-9a-fA-F]{6}$' then raise exception 'Invalid color'; end if;
+  if p_kind='product' then
+    for member in select key,value from jsonb_each(doc) where key in ('description','result') loop
+      if jsonb_typeof(member.value)<>'string' or octet_length(doc->>member.key)>24000 then raise exception 'Invalid product text'; end if;
+    end loop;
+  end if;
   update public.tracker_entities set payload=doc,deleted=case when p_action='delete' then true when p_action='restore' then false else deleted end,version=version+1,updated_at=clock_timestamp() where board_id=p_board and id=p_id returning * into item;
   return next item;
 end $$;
