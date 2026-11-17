@@ -88,6 +88,17 @@
     }
     return [...products.values()];
   }
+  function taskRange(tasks,anchorId,targetId){
+    const a=tasks.findIndex(t=>t.id===anchorId),b=tasks.findIndex(t=>t.id===targetId);
+    return b<0?[]:a<0?[targetId]:tasks.slice(Math.min(a,b),Math.max(a,b)+1).map(t=>t.id);
+  }
+  function moveTaskDates(tasks,origins,delta){
+    const live=new Set(tasks.map(t=>t.id)),selected=origins.filter(t=>live.has(t.id));
+    if(!selected.length)return tasks;
+    const d=Math.max(-Math.min(...selected.map(t=>t.start)),Math.min(23-Math.max(...selected.map(t=>t.end)),Math.round(delta)));
+    const dates=new Map(selected.map(t=>[t.id,{start:t.start+d,end:t.end+d}]));
+    return tasks.map(t=>{const next=dates.get(t.id);return next&&(t.start!==next.start||t.end!==next.end)?{...t,...next}:t;});
+  }
   const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
   function pathValue(entity,path){return path.reduce((value,key)=>value?.[key],entity?.payload);}
   function undoChanges(before,after){
@@ -127,6 +138,6 @@
     peek(){return this.entries.at(-1);}
     pop(){this.key=null;return this.entries.pop();}
   }
-  const api={toEntities,diffEntities,applyOperation,toPlan,groupProductTasks,reorderProductTasks,UndoHistory,undoChanges,summarizeProducts};
+  const api={toEntities,diffEntities,applyOperation,toPlan,groupProductTasks,reorderProductTasks,UndoHistory,undoChanges,summarizeProducts,taskRange,moveTaskDates};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.TrackerSyncCore=api;
 })(globalThis);

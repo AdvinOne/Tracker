@@ -10,6 +10,7 @@ const initial={id:'TASK-001',name:'Обновление личного каби�
 function validTask(t){return t&&typeof t.name==='string'&&typeof t.product==='string'&&Number.isInteger(t.start)&&Number.isInteger(t.end)&&t.start>=0&&t.end>=t.start&&t.end<24&&Array.isArray(t.assignments)}
 function cleanTask(t){const seen=new Set();return {...t,id:typeof t.id==='string'&&t.id?t.id:crypto.randomUUID(),year,assignments:t.assignments.filter(a=>a&&team.some(p=>p.id===a.id)&&Number.isFinite(a.pct)&&a.pct>=0&&a.pct<=100&&!seen.has(a.id)&&seen.add(a.id))}}
 let tasks=[],trash=[],activeTaskId=null;
+let selectedTaskIds=new Set(),selectionAnchor=null;
 let productColors=new Map(),productDetails=new Map(),hiddenProducts=new Set();
 let productFilterSignature='';
 try{
@@ -178,7 +179,11 @@ function renderDerived(){
   renderProductSummaries();
   const sprintLoads=calculateSprintLoads(tasks,team);
   renderProductFilters();renderSummary(sprintLoads);renderSprintIndicators(sprintLoads);
-  const visibleCount=tasks.filter(visibleTask).length;
+  const visibleIds=new Set(tasks.filter(visibleTask).map(t=>t.id));
+  selectedTaskIds=new Set([...selectedTaskIds].filter(id=>visibleIds.has(id)));
+  $('clearTaskSelection').hidden=selectedTaskIds.size<2;
+  $('clearTaskSelection').textContent=`Выбрано: ${selectedTaskIds.size} ×`;
+  const visibleCount=visibleIds.size;
   $('taskCount').textContent=visibleCount===tasks.length?String(tasks.length):`${visibleCount}/${tasks.length}`;
   $('emptyTasks').hidden=tasks.length>0;
 
@@ -186,6 +191,7 @@ function renderDerived(){
     const t=tasks.find(t=>t.id===row.dataset.taskId);if(!t)continue;
     row.hidden=!visibleTask(t);row.style.setProperty('--product-color',productColor(productKey(t)));
     row.classList.toggle('is-active',t.id===activeTaskId);
+    row.classList.toggle('is-multiselected',selectedTaskIds.size>1&&selectedTaskIds.has(t.id));
     const unassigned=t.assignments.length===0;
     row.classList.toggle('is-unassigned',unassigned);
     row.querySelector('.unassigned-label').hidden=!unassigned;
@@ -209,6 +215,37 @@ function renderAllocations(){
   renderDerived();
 }
 function selectTask(id){if(activeTaskId===id)return;activeTaskId=id;$('personPicker').hidden=true;renderAllocations();persist()}
+function selectForMove(id,event){
+  if(event.shiftKey){
+    const anchor=selectionAnchor||activeTaskId||id;
+    selectedTaskIds=new Set([...selectedTaskIds,...TrackerSyncCore.taskRange(tasks.filter(visibleTask),anchor,id)]);
+    selectionAnchor=anchor;
+  }else if(event.ctrlKey||event.metaKey){
+    if(selectedTaskIds.has(id))selectedTaskIds.delete(id);else selectedTaskIds.add(id);
+    selectionAnchor=id;
+  }else{
+    if(!selectedTaskIds.has(id))selectedTaskIds=new Set([id]);
+    selectionAnchor=id;
+  }
+  selectTask(id);renderDerived();
+}
+$('clearTaskSelection').onclick=()=>{selectedTaskIds.clear();selectionAnchor=activeTaskId;renderDerived();};
+// Modifiers select rows without starting a resize, reorder, or text selection.
+let selectionClickId=null;
+$('taskRows').addEventListener('pointerdown',e=>{
+  const row=e.target.closest('[data-task-id]');if(!row||e.button!==0||e.target.closest('[data-delete]'))return;
+  if(e.target.matches('input')&&document.activeElement===e.target)return;
+  selectForMove(row.dataset.taskId,e);
+  if(e.shiftKey||e.ctrlKey||e.metaKey){
+    selectionClickId=row.dataset.taskId;e.preventDefault();e.stopImmediatePropagation();
+  }else selectionClickId=null;
+},true);
+$('taskRows').addEventListener('click',e=>{
+  if(selectionClickId&&e.target.closest('[data-task-id]')?.dataset.taskId===selectionClickId){selectionClickId=null;e.preventDefault();e.stopImmediatePropagation();}
+},true);
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!drag&&!rowDrag&&!e.target.closest('dialog')){selectedTaskIds.clear();selectionAnchor=activeTaskId;renderDerived();}
+});
 function addTask(){
   const task={id:crypto.randomUUID(),year,position:Math.max(0,...tasks.map(t=>t.position||0))+1024,name:'Новая задача',product:currentTask()?.product||'',start:selected,end:selected,assignments:[]};
   hiddenProducts.delete(productKey(task));tasks.push(task);activeTaskId=task.id;renderRows();renderAllocations();persist();
@@ -333,15 +370,42 @@ $('taskRows').addEventListener('keydown',e=>{
 $('taskRows').addEventListener('pointerdown',e=>{
   const bar=e.target.closest('.task-bar');if(!bar||e.button!==0)return;
   const t=tasks.find(t=>t.id===bar.closest('[data-task-id]').dataset.taskId);selectTask(t.id);
-  drag={id:t.id,x:e.clientX,start:t.start,end:t.end,edge:e.target.closest('[data-edge]')?.dataset.edge,width:bar.closest('.track').getBoundingClientRect().width};bar.focus();bar.setPointerCapture(e.pointerId);e.preventDefault();
+  const edge=e.target.closest('[data-edge]')?.dataset.edge;
+  const ids=edge?new Set([t.id]):selectedTaskIds.has(t.id)?selectedTaskIds:new Set([t.id]);
+  cloud?.endAction();
+  drag={id:t.id,x:e.clientX,start:t.start,end:t.end,edge,origins:tasks.filter(t=>ids.has(t.id)).map(({id,start,end})=>({id,start,end})),width:bar.closest('.track').getBoundingClientRect().width,bar,pointerId:e.pointerId};
+  bar.focus();bar.setPointerCapture(e.pointerId);e.preventDefault();
 });
 $('taskRows').addEventListener('pointermove',e=>{
-  if(!drag)return;const t=tasks.find(t=>t.id===drag.id);if(!t)return;const delta=Math.round((e.clientX-drag.x)/(drag.width/visibleSprints));
-  if(drag.edge==='left')t.start=Math.max(0,Math.min(drag.end,drag.start+delta));else if(drag.edge==='right')t.end=Math.max(drag.start,Math.min(23,drag.end+delta));else{const d=Math.max(-drag.start,Math.min(23-drag.end,delta));t.start=drag.start+d;t.end=drag.end+d}renderDerived();
+  if(!drag||drag.pointerId!==e.pointerId)return;
+  const t=tasks.find(t=>t.id===drag.id);if(!t)return;
+  const delta=Math.round((e.clientX-drag.x)/(drag.width/visibleSprints));
+  if(drag.edge==='left')t.start=Math.max(0,Math.min(drag.end,drag.start+delta));
+  else if(drag.edge==='right')t.end=Math.max(drag.start,Math.min(23,drag.end+delta));
+  else tasks=TrackerSyncCore.moveTaskDates(tasks,drag.origins,delta);
+  renderDerived();
 });
-function finishDrag(){if(drag){drag=null;save();if(cloudDeferred){cloudDeferred=false;cloud?.refresh().catch(()=>{})}}}
-$('taskRows').addEventListener('pointerup',finishDrag);$('taskRows').addEventListener('pointercancel',finishDrag);
-$('taskRows').addEventListener('keydown',e=>{if(!e.target.closest('.task-bar')||e.altKey||e.ctrlKey||e.metaKey||!['ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();const t=tasks.find(t=>t.id===e.target.closest('[data-task-id]').dataset.taskId),d=e.key==='ArrowLeft'?-1:1;if(t.start+d>=0&&t.end+d<24){t.start+=d;t.end+=d;save()}});
+function finishDrag(commit=true){
+  if(!drag)return;
+  const state=drag;drag=null;
+  if(!commit)tasks=TrackerSyncCore.moveTaskDates(tasks,state.origins,0);
+  if(state.bar.hasPointerCapture(state.pointerId))state.bar.releasePointerCapture(state.pointerId);
+  if(commit)save();else renderDerived();
+  cloud?.endAction();
+  if(cloudDeferred){cloudDeferred=false;cloud?.refresh().catch(()=>{});}
+}
+$('taskRows').addEventListener('pointerup',()=>finishDrag());
+$('taskRows').addEventListener('pointercancel',()=>finishDrag(false));
+$('taskRows').addEventListener('lostpointercapture',()=>finishDrag(false));
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&drag){e.preventDefault();finishDrag(false);}});
+$('taskRows').addEventListener('keydown',e=>{
+  if(!e.target.closest('.task-bar')||e.altKey||e.ctrlKey||e.metaKey||!['ArrowLeft','ArrowRight'].includes(e.key))return;
+  e.preventDefault();
+  const id=e.target.closest('[data-task-id]').dataset.taskId;
+  const ids=selectedTaskIds.has(id)?selectedTaskIds:new Set([id]);
+  cloud?.endAction();
+  tasks=TrackerSyncCore.moveTaskDates(tasks,tasks.filter(t=>ids.has(t.id)),e.key==='ArrowLeft'?-1:1);save();cloud?.endAction();
+});
 ensureVisibleSelection();renderTimeline();renderAllocations();persist();
 
 const zoom={x:100,y:100};

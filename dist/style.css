@@ -276,3 +276,9 @@ body.reordering-task,body.reordering-task *{cursor:grabbing!important;user-selec
 .product-link-form{margin:16px 24px 0;padding:10px;background:#f6f8f2;border-radius:6px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;font-size:12px}
 .product-link-form[hidden]{display:none}.product-link-form input{min-width:160px;flex:1;padding:7px;border:1px solid #dce3d5;border-radius:4px;font:inherit}
 .product-link-form button{padding:7px;border:1px solid #dce3d5;border-radius:4px;background:white;font:inherit;color:#52634b;cursor:pointer}.product-link-error{flex-basis:100%}
+
+/* Personal multi-selection does not change product colors. */
+.task-row.is-multiselected .task-info{background:#edf3fa;box-shadow:inset 3px 0 #6182b2}
+.task-row.is-multiselected .task-bar{outline:2px solid #6182b2;outline-offset:1px}
+.task-row.is-multiselected .grid{background:#6182b209}
+.selection-count{border:1px solid #d5dfed;border-radius:4px;background:#edf3fa;color:#4c6b99;padding:3px 7px;font-size:9px;white-space:nowrap}
