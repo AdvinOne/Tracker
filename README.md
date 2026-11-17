@@ -54,3 +54,5 @@ Ctrl+Z / Command+Z and the Undo button reverse up to five own actions in the cur
 Undo waits for prior changes to save, then tracker_undo locks affected rows and compares the edited fields (the full payload for create/delete). A conflict skips the entire action; unrelated fields edited by collaborators survive. Retrying an undo request is idempotent. Offline undo is retained for retry. The restore-deleted-task button also creates an own action.
 
 Run npm test for history and sync tests. tests/undo-access.sql tests atomic conflicts, independent fields, idempotent retries and access under member RLS; all its test records are rolled back.
+
+Product summary rows are read-only and derived from tasks: one thin colored bar per product spans the earliest task start through the latest task end, including gaps. They follow product filters and colors, update during task moves, and never add assignments or team load.

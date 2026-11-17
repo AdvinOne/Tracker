@@ -66,6 +66,15 @@
     // Persist the entire contiguous order so a refresh cannot split product groups.
     return reordered.map((t,i)=>t.position===i*1024?t:{...t,position:i*1024});
   }
+  function summarizeProducts(tasks){
+    const products=new Map();
+    for(const task of tasks){
+      const product=task.product.trim(),summary=products.get(product);
+      if(summary){summary.start=Math.min(summary.start,task.start);summary.end=Math.max(summary.end,task.end);}
+      else products.set(product,{product,start:task.start,end:task.end,firstTaskId:task.id});
+    }
+    return [...products.values()];
+  }
   const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
   function pathValue(entity,path){return path.reduce((value,key)=>value?.[key],entity?.payload);}
   function undoChanges(before,after){
@@ -105,6 +114,6 @@
     peek(){return this.entries.at(-1);}
     pop(){this.key=null;return this.entries.pop();}
   }
-  const api={toEntities,diffEntities,applyOperation,toPlan,groupProductTasks,reorderProductTasks,UndoHistory,undoChanges};
+  const api={toEntities,diffEntities,applyOperation,toPlan,groupProductTasks,reorderProductTasks,UndoHistory,undoChanges,summarizeProducts};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.TrackerSyncCore=api;
 })(globalThis);

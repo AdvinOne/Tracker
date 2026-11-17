@@ -134,7 +134,45 @@ function renderRows(){
   $('taskCount').textContent=String(tasks.length);
   $('undoDelete').disabled=trash.length===0;
 }
+function renderProductSummaries(){
+  const container=$('taskRows');
+  if(document.activeElement?.dataset.field!=='product'){
+    tasks=TrackerSyncCore.groupProductTasks(tasks);
+    const taskRows=[...container.querySelectorAll('.task-row')];
+    if(taskRows.some((row,i)=>row.dataset.taskId!==tasks[i]?.id)){
+      const byId=new Map(taskRows.map(row=>[row.dataset.taskId,row]));
+      tasks.forEach(task=>{const row=byId.get(task.id);if(row)container.append(row);});
+    }
+  }
+  const headers=new Map([...container.querySelectorAll('.product-summary')].map(row=>[row.dataset.productSummary,row]));
+  const rows=new Map([...container.querySelectorAll('.task-row')].map(row=>[row.dataset.taskId,row]));
+  for(const summary of TrackerSyncCore.summarizeProducts(tasks)){
+    let row=headers.get(summary.product);
+    if(!row){
+      row=document.createElement('div');row.className='product-summary';row.dataset.productSummary=summary.product;
+      row.innerHTML='<div class="product-summary-label"></div><div class="track"><div class="grid"></div><div class="product-summary-bar" role="img"><span></span></div></div>';
+    }
+    headers.delete(summary.product);
+    const first=rows.get(summary.firstTaskId);
+    if(first&&first.previousElementSibling!==row)container.insertBefore(row,first);
+    row.hidden=hiddenProducts.has(summary.product);row.style.setProperty('--product-color',productColor(summary.product));
+    const label=summary.product||'Без продукта';
+    row.querySelector('.product-summary-label').textContent=label;
+    row.querySelector('.product-summary-label').title=label;
+    const grid=row.querySelector('.grid');
+    if(grid.dataset.selected!==String(selected)||grid.dataset.base!==String(base)){
+      grid.innerHTML=Array.from({length:visibleSprints},(_,j)=>`<div class="${base+j===selected?'selected':''}"></div>`).join('');grid.dataset.selected=selected;grid.dataset.base=base;
+    }
+    const bar=row.querySelector('.product-summary-bar'),from=Math.max(summary.start,base),to=Math.min(summary.end,base+visibleSprints-1);
+    bar.hidden=from>to;bar.style.left=`calc(${(from-base)/visibleSprints*100}% + 5px)`;bar.style.width=`calc(${(to-from+1)/visibleSprints*100}% - 10px)`;
+    bar.querySelector('span').textContent=label;
+    const range=`${label}: ${sprintText(summary.start)} — ${sprintText(summary.end)}`;
+    bar.setAttribute('aria-label',range);bar.title=range;
+  }
+  for(const row of headers.values())row.remove();
+}
 function renderDerived(){
+  renderProductSummaries();
   const sprintLoads=calculateSprintLoads(tasks,team);
   renderProductFilters();renderSummary(sprintLoads);renderSprintIndicators(sprintLoads);
   const visibleCount=tasks.filter(visibleTask).length;
@@ -188,10 +226,11 @@ $('addTask').onclick=addTask;$('emptyTasks').onclick=addTask;$('undoDelete').onc
 $('taskRows').addEventListener('click',e=>{const row=e.target.closest('[data-task-id]');if(!row)return;if(e.target.closest('[data-delete]')){deleteTask(row.dataset.taskId);return;}selectTask(row.dataset.taskId)});
 $('taskRows').addEventListener('focusin',e=>{const row=e.target.closest('[data-task-id]');if(row)selectTask(row.dataset.taskId)});
 $('taskRows').addEventListener('input',e=>{const field=e.target.dataset.field;if(!field)return;const t=tasks.find(t=>t.id===e.target.closest('[data-task-id]').dataset.taskId);t[field]=e.target.value;save()});
+$('taskRows').addEventListener('focusout',e=>{if(e.target.dataset.field==='product')setTimeout(()=>renderDerived(),0);});
 $('taskRows').addEventListener('change',e=>{
   if(e.target.dataset.field!=='product')return;
   tasks=TrackerSyncCore.groupProductTasks(tasks);
-  const rows=new Map([...$('taskRows').children].map(row=>[row.dataset.taskId,row]));
+  const rows=new Map([...$('taskRows').querySelectorAll('.task-row')].map(row=>[row.dataset.taskId,row]));
   tasks.forEach(task=>$('taskRows').append(rows.get(task.id)));
   renderDerived();persist();
 });
@@ -388,9 +427,9 @@ function applyCloudPlan(plan){
     productColors=new Map(Object.entries(plan.productColors));
     ensureVisibleSelection();
     const newIds=tasks.filter(visibleTask).map(t=>t.id).join('|');
-    const hasRows=[...$('taskRows').children].map(r=>r.dataset.taskId).join('|')===tasks.map(t=>t.id).join('|');
+    const hasRows=[...$('taskRows').querySelectorAll('.task-row')].map(r=>r.dataset.taskId).join('|')===tasks.map(t=>t.id).join('|');
     if(!hasRows||oldIds!==newIds)renderRows();
-    else for(const row of $('taskRows').children){
+    else for(const row of $('taskRows').querySelectorAll('.task-row')){
       const task=tasks.find(t=>t.id===row.dataset.taskId);
       for(const input of row.querySelectorAll('[data-field]'))if(document.activeElement!==input)input.value=task[input.dataset.field];
     }

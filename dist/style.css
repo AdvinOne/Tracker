@@ -246,3 +246,10 @@ body.reordering-task,body.reordering-task *{cursor:grabbing!important;user-selec
 .signed-in-name{font-size:10px;color:#6c7c65}.logout-button{font-size:10px;border-right:1px solid #e1e7dc;padding-right:10px}
 
 .undo-notice{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:110;padding:10px 16px;border-radius:6px;background:#24372e;color:#fff;font-size:12px;box-shadow:0 4px 18px #24372e20;max-width:90vw}
+
+/* Automatic, read-only product envelope above each task group. */
+.product-summary{display:grid;grid-template-columns:240px minmax(0,1fr);height:22px;min-height:22px;border-top:1px solid color-mix(in srgb,var(--product-color) 22%,white);border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--product-color) 4%,white)}
+.product-summary-label{display:flex;align-items:center;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 10px 0 23px;border-right:1px solid var(--border);font-size:10px;font-weight:600;color:#52634b;cursor:default}
+.product-summary-bar{position:absolute;top:50%;transform:translateY(-50%);height:12px;min-width:0;border-radius:2px;background:color-mix(in srgb,var(--product-color) 42%,white);border:1px solid color-mix(in srgb,var(--product-color) 72%,white);color:#34432e;overflow:hidden;white-space:nowrap;font-size:9px;font-weight:600;line-height:10px;padding:0 7px;cursor:default;user-select:none}
+.product-summary-bar span{display:block;overflow:hidden;text-overflow:ellipsis}
+.timeline.is-column-pinned .product-summary-label{position:sticky;left:0;z-index:4;background:color-mix(in srgb,var(--product-color) 6%,white);box-shadow:3px 0 4px #263a2510}
