@@ -303,3 +303,16 @@ body.reordering-task,body.reordering-task *{cursor:grabbing!important;user-selec
 .product-info-dialog.is-view .rich-editor{min-height:0;padding:0;border:0;border-radius:0;box-shadow:none;cursor:auto}
 .product-info-dialog.is-view .rich-editor:empty::before{content:'Не заполнено';color:#a1a99c;font-size:12px}
 .product-info-dialog.is-view .rich-editor>:last-child{margin-bottom:0}
+
+/* Shared document vocabulary; no arbitrary font families or sizes. */
+.rich-toolbar{flex-wrap:wrap;gap:3px}
+.rich-toolbar select{max-width:146px;border:1px solid #dfe5d8;border-radius:4px;background:#fff;color:#56644d;padding:4px;font:inherit;font-size:11px;height:26px}
+.rich-toolbar [data-text-color],.rich-toolbar [data-text-highlight]{max-width:108px}
+.rich-editor{font-family:'Golos Text',Arial,sans-serif;font-size:14px;color:#2c3828;font-weight:400}
+.rich-editor p,.rich-editor div{font-size:inherit;color:inherit;line-height:1.6;margin:0 0 8px}
+.rich-editor h3{font-size:16px;font-weight:650;line-height:1.45;color:inherit;margin:18px 0 8px}
+.rich-editor h4{font-size:14px;font-weight:600;line-height:1.5;color:inherit;margin:12px 0 6px}
+.rich-editor [data-text-style="note"]{font-size:12px;color:#78816f;line-height:1.6}
+.rich-editor>:first-child{margin-top:0}
+.rich-editor ul,.rich-editor ol{margin:6px 0 10px;padding-left:24px}
+.rich-editor li{line-height:1.6}.rich-editor li>ul,.rich-editor li>ol{margin:3px 0}

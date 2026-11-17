@@ -67,3 +67,6 @@ Timeline multi-selection is personal and temporary. Click a task, then Shift-cli
 
 
 The toolbar has no Undo or Restore buttons; Ctrl/⌘+Z remains available, including undoing deletion within the last five own actions. Team load and assignees start collapsed and can be expanded by their headings. Their expanded/collapsed states are personal browser preferences.
+
+
+Product text uses one shared style vocabulary and palette for editing, paste and display. See [product text rules](docs/product-text-format.md) before filling descriptions through ChatGPT or any import. Browser checks in tests/rich-text-browser.js cover normalization, compatibility with legacy text, repeated rendering, allowed styles and unsafe HTML.
