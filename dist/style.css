@@ -293,3 +293,13 @@ body.reordering-task,body.reordering-task *{cursor:grabbing!important;user-selec
 #teamLoadBody{display:flex;gap:12px;min-width:0}
 #teamLoadBody>.section-title{width:130px;flex:none;display:block;padding-top:3px}
 #teamLoadBody>.summary-body{flex:1;min-width:0}
+
+/* Product details open as a compact document; editing is explicit. */
+.product-info-edit{flex:none;border:0;border-radius:4px;background:transparent;color:#75826e;font-size:11px;padding:5px 7px;cursor:pointer}
+.product-info-edit:hover,.product-info-edit:focus-visible{background:#f0f4eb;color:#344d29}
+.product-info-dialog.is-view{padding-bottom:22px}
+.product-info-dialog.is-view .product-info-heading{padding-bottom:12px;border-bottom:0}
+.product-info-dialog.is-view .product-info-field{margin-top:14px}
+.product-info-dialog.is-view .rich-editor{min-height:0;padding:0;border:0;border-radius:0;box-shadow:none;cursor:auto}
+.product-info-dialog.is-view .rich-editor:empty::before{content:'Не заполнено';color:#a1a99c;font-size:12px}
+.product-info-dialog.is-view .rich-editor>:last-child{margin-bottom:0}

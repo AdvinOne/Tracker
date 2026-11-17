@@ -28,15 +28,16 @@
   }
   class ProductInfo{
     constructor(options){
-      this.options=options;this.product=null;this.range=null;this.editor=null;this.last=new Map();
+      this.options=options;this.editing=false;this.product=null;this.range=null;this.editor=null;this.last=new Map();
       const dialog=document.createElement('dialog');this.dialog=dialog;dialog.className='product-info-dialog';
       dialog.setAttribute('aria-labelledby','productInfoTitle');
-      dialog.innerHTML=`<header class="product-info-heading"><h2 id="productInfoTitle"></h2><button type="button" class="product-info-close" aria-label="Закрыть">×</button></header>
+      dialog.innerHTML=`<header class="product-info-heading"><h2 id="productInfoTitle"></h2><button type="button" class="product-info-edit" aria-pressed="false">Редактировать</button><button type="button" class="product-info-close" aria-label="Закрыть">×</button></header>
         ${fields.map(([key,label])=>`<section class="product-info-field"><h3 id="info-${key}-label">${label}</h3><div class="rich-toolbar" role="toolbar" aria-label="Форматирование: ${label}"><button type="button" data-command="bold" aria-label="Жирный" title="Жирный · Ctrl/⌘+B"><b>B</b></button><button type="button" data-command="link" aria-label="Вставить ссылку" title="Ссылка · Ctrl/⌘+K">↗</button><button type="button" data-command="insertOrderedList" aria-label="Нумерованный список" title="Нумерованный список">1.</button><button type="button" data-command="insertUnorderedList" aria-label="Маркированный список" title="Маркированный список">•</button></div><div class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="info-${key}-label" data-info-field="${key}" spellcheck="true"></div></section>`).join('')}
         <form class="product-link-form" hidden><label for="productLinkUrl">Ссылка</label><input id="productLinkUrl" type="url" placeholder="https://" required><button type="submit">Применить</button><button type="button" data-link-remove>Убрать</button><button type="button" data-link-cancel aria-label="Отмена ссылки">×</button><span class="product-link-error" role="alert"></span></form><footer class="product-info-footer"><span class="product-info-status" role="status"></span><span class="product-info-error" role="alert"></span></footer>`;
       document.body.append(dialog);
       this.editors=[...dialog.querySelectorAll('.rich-editor')];this.linkForm=dialog.querySelector('form');this.linkInput=dialog.querySelector('#productLinkUrl');
       dialog.querySelector('.product-info-close').onclick=()=>this.close();
+      dialog.querySelector('.product-info-edit').onclick=()=>this.setEditing(!this.editing);
       dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)this.close();}});
       dialog.addEventListener('cancel',()=>{this.hideLink();this.options.end();});
       dialog.addEventListener('close',()=>{this.options.end();this.product=null;this.trigger?.focus();});
@@ -46,11 +47,12 @@
         editor.addEventListener('focus',()=>{this.editor=editor;});
         editor.addEventListener('blur',()=>{this.options.end();});
         editor.addEventListener('keydown',e=>{
+          if(!this.editing)return;
           if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();this.remember();this.showLink(editor);}
         });
-        editor.addEventListener('paste',e=>{e.preventDefault();const html=e.clipboardData.getData('text/html'),text=e.clipboardData.getData('text/plain');editor.focus();if(html)document.execCommand('insertHTML',false,sanitize(html));else document.execCommand('insertText',false,text);this.save(editor);});
+        editor.addEventListener('paste',e=>{if(!this.editing)return;e.preventDefault();const html=e.clipboardData.getData('text/html'),text=e.clipboardData.getData('text/plain');editor.focus();if(html)document.execCommand('insertHTML',false,sanitize(html));else document.execCommand('insertText',false,text);this.save(editor);});
         editor.addEventListener('drop',e=>e.preventDefault());
-        editor.addEventListener('click',e=>{const a=e.target.closest('a');if(!a)return;e.preventDefault();const href=safeLink(a.getAttribute('href')||'');if(href&&(e.ctrlKey||e.metaKey))root.open(href,'_blank','noopener,noreferrer');});
+        editor.addEventListener('click',e=>{if(!this.editing)return;const a=e.target.closest('a');if(!a)return;e.preventDefault();const href=safeLink(a.getAttribute('href')||'');if(href&&(e.ctrlKey||e.metaKey))root.open(href,'_blank','noopener,noreferrer');});
       }
       dialog.querySelectorAll('[data-command]').forEach(button=>{
         button.addEventListener('mousedown',e=>e.preventDefault());
@@ -66,6 +68,7 @@
       this.linkForm.querySelector('[data-link-cancel]').onclick=()=>{this.hideLink();this.restore(this.editor);};
     }
     remember(){
+      if(!this.editing)return;
       const s=getSelection();if(!s.rangeCount)return;
       const editor=this.editors.find(e=>e.contains(s.anchorNode)&&e.contains(s.focusNode));
       if(!editor)return;this.editor=editor;this.range=s.getRangeAt(0).cloneRange();
@@ -76,7 +79,7 @@
     showLink(editor){this.restore(editor);this.remember();this.linkForm.hidden=false;const s=getSelection(),a=s.anchorNode?.parentElement?.closest('a');this.linkInput.value=a&&editor.contains(a)?a.getAttribute('href'):'';this.linkForm.querySelector('.product-link-error').textContent='';this.linkInput.focus();}
     hideLink(){this.linkForm.hidden=true;}
     save(editor){
-      if(this.product===null)return;
+      if(this.product===null||!this.editing)return;
       const value=sanitize(editor.innerHTML),field=editor.dataset.infoField;
       if(new TextEncoder().encode(JSON.stringify(value)).length>24000){this.dialog.querySelector('.product-info-error').textContent='Поле слишком длинное — сократите текст.';editor.innerHTML=this.last.get(field)||'';return;}
       this.dialog.querySelector('.product-info-error').textContent='';
@@ -86,16 +89,32 @@
       if(this.product===null)return;
       const details=this.options.read(this.product);
       for(const editor of this.editors){
-        if(editor===document.activeElement||(!this.linkForm.hidden&&editor===this.editor))continue;
+        if(this.editing&&(editor===document.activeElement||(!this.linkForm.hidden&&editor===this.editor)))continue;
         const value=sanitize(details[editor.dataset.infoField]||'');
         if(editor.innerHTML!==value)editor.innerHTML=value;
         this.last.set(editor.dataset.infoField,value);
       }
     }
+    setEditing(editing){
+      this.options.end();this.hideLink();this.range=null;
+      this.editing=editing;this.dialog.classList.toggle('is-view',!editing);
+      const button=this.dialog.querySelector('.product-info-edit');
+      button.textContent=editing?'Готово':'Редактировать';
+      button.setAttribute('aria-pressed',String(editing));
+      this.dialog.querySelector('.product-info-footer').hidden=!editing;
+      for(const editor of this.editors){
+        editor.contentEditable=String(editing);
+        editor.setAttribute('role',editing?'textbox':'region');
+        if(editing)editor.setAttribute('aria-multiline','true');else editor.removeAttribute('aria-multiline');
+        editor.previousElementSibling.hidden=!editing;
+      }
+      this.refresh();
+      if(editing)this.editors[0].focus();
+    }
     open(name,trigger){
       this.options.end();this.product=name;this.trigger=trigger;this.range=null;this.hideLink();
       this.dialog.querySelector('h2').textContent=name||'Без продукта';this.dialog.querySelector('.product-info-error').textContent='';
-      this.refresh();this.status(document.getElementById('saveState').textContent);this.dialog.showModal();
+      this.setEditing(false);this.status(document.getElementById('saveState').textContent);this.dialog.showModal();
     }
     status(value){this.dialog.querySelector('.product-info-status').textContent=value;}
     close(){this.hideLink();this.dialog.close();}
