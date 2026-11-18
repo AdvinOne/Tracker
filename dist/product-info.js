@@ -140,11 +140,11 @@
       const value=sanitize(editor.innerHTML),field=editor.dataset.infoField;
       if(new TextEncoder().encode(JSON.stringify(value)).length>24000){this.dialog.querySelector('.product-info-error').textContent='Поле слишком длинное — сократите текст.';editor.innerHTML=this.last.get(field)||'';return;}
       this.dialog.querySelector('.product-info-error').textContent='';
-      this.last.set(field,value);this.options.write(this.product,field,value);
+      this.last.set(field,value);this.options.write(this.product,field,value,this.kind);
     }
     refresh(){
       if(this.product===null)return;
-      const details=this.options.read(this.product);
+      const details=this.options.read(this.product,this.kind);
       for(const editor of this.editors){
         if(this.editing&&(editor===document.activeElement||(!this.linkForm.hidden&&editor===this.editor)))continue;
         const value=sanitize(details[editor.dataset.infoField]||'');
@@ -160,7 +160,7 @@
       button.setAttribute('aria-pressed',String(editing));
       this.dialog.querySelector('.product-info-footer').hidden=!editing;
       for(const editor of this.editors){
-        editor.contentEditable=String(editing);
+        editor.setAttribute('contenteditable',String(editing));
         editor.setAttribute('role',editing?'textbox':'region');
         if(editing)editor.setAttribute('aria-multiline','true');else editor.removeAttribute('aria-multiline');
         editor.previousElementSibling.hidden=!editing;
@@ -168,9 +168,9 @@
       this.refresh();
       if(editing)this.editors[0].focus();
     }
-    open(name,trigger){
-      this.options.end();this.product=name;this.trigger=trigger;this.range=null;this.hideLink();
-      this.dialog.querySelector('h2').textContent=name||'Без продукта';this.dialog.querySelector('.product-info-error').textContent='';
+    open(name,trigger,context={}){
+      this.options.end();this.product=name;this.kind=context.kind||'product';this.trigger=trigger;this.range=null;this.hideLink();
+      this.dialog.querySelector('h2').textContent=context.title??(name||'Без продукта');this.dialog.querySelector('.product-info-error').textContent='';
       this.setEditing(false);this.status(document.getElementById('saveState').textContent);this.dialog.showModal();
     }
     status(value){this.dialog.querySelector('.product-info-status').textContent=value;}

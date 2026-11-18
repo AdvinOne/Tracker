@@ -2,7 +2,9 @@
   function toEntities(plan){
     const result=new Map();
     function taskEntity(task,index,deleted){
-      return {id:'t:'+task.id,kind:'task',deleted,payload:{name:task.name,product:task.product,start:task.start,end:task.end,position:task.position??index*1024,assignments:Object.fromEntries(task.assignments.map(a=>[a.id,a.pct]))}};
+      const payload={name:task.name,product:task.product,start:task.start,end:task.end,position:task.position??index*1024,assignments:Object.fromEntries(task.assignments.map(a=>[a.id,a.pct]))};
+      for(const field of ['description','result'])if(typeof task[field]==='string')payload[field]=task[field];
+      return {id:'t:'+task.id,kind:'task',deleted,payload};
     }
     (plan.trash||[]).forEach((entry,index)=>result.set('t:'+entry.task.id,taskEntity(entry.task,entry.index??index,true)));
     plan.tasks.forEach((task,index)=>result.set('t:'+task.id,taskEntity(task,index,false)));
@@ -59,6 +61,7 @@
       const p=entity.payload;
       if(typeof p.name!=='string'||typeof p.product!=='string'||!Number.isInteger(p.start)||!Number.isInteger(p.end)||p.start<0||p.end<p.start||p.end>23||!p.assignments||typeof p.assignments!=='object')continue;
       const task={id:entity.id.slice(2),year:2027,name:p.name,product:p.product,start:p.start,end:p.end,position:p.position||0,assignments:Object.entries(p.assignments).filter(([id,pct])=>Number.isFinite(pct)&&pct>=0&&pct<=100).map(([id,pct])=>({id,pct}))};
+      for(const field of ['description','result'])if(typeof p[field]==='string')task[field]=p[field];
       if(entity.deleted)trash.push({task,index:0,deletedAt:entity.updated_at||''});else tasks.push(task);
     }
     tasks.sort((a,b)=>a.position-b.position||a.id.localeCompare(b.id));

@@ -44,7 +44,7 @@ function persist(){
   try{localStorage.setItem(key,JSON.stringify({year,tasks,trash,activeTaskId,productColors:Object.fromEntries(productColors),productDetails:Object.fromEntries(productDetails),hiddenProducts:[...hiddenProducts]}))}catch{}
   if(cloud&&!cloudApplying){
     const input=document.activeElement,row=input?.closest('[data-task-id]');
-    cloud.actionKey=input?.dataset.infoField?`product:${productInfo.product}:${input.dataset.infoField}`:input?.dataset.field?`task:${row?.dataset.taskId}:${input.dataset.field}`:input?.dataset.kind?`allocation:${activeTaskId}:${input.closest('[data-person]')?.dataset.person}`:input?.dataset.productColor!==undefined?`color:${input.dataset.productColor}`:null;
+    cloud.actionKey=input?.dataset.infoField?`${productInfo.kind}:${productInfo.product}:${input.dataset.infoField}`:input?.dataset.field?`task:${row?.dataset.taskId}:${input.dataset.field}`:input?.dataset.kind?`allocation:${activeTaskId}:${input.closest('[data-person]')?.dataset.person}`:input?.dataset.productColor!==undefined?`color:${input.dataset.productColor}`:null;
     cloud.capture({tasks,trash,productColors:Object.fromEntries(productColors),productDetails:Object.fromEntries(productDetails)});
   }
 }
@@ -131,7 +131,7 @@ function renderTimeline(){
 }
 function renderRows(){
   tasks=TrackerSyncCore.groupProductTasks(tasks);
-  $('taskRows').innerHTML=tasks.map(t=>`<div class="task-row ${t.id===activeTaskId?'is-active':''}" data-task-id="${esc(t.id)}"><div class="task-info"><button class="task-reorder" aria-label="Изменить порядок задачи ${esc(t.name||'Без названия')}" title="Перетащить в пределах продукта · Alt + ↑/↓">⠿</button><input class="task-name" data-field="name" aria-label="Название задачи" maxlength="120" value="${esc(t.name)}"><div class="product-line"><span class="product-dot"></span><input data-field="product" aria-label="Продукт" placeholder="Продукт" maxlength="80" value="${esc(t.product)}"><span class="unassigned-label" hidden>Не назначено</span></div><button class="delete-task" data-delete aria-label="Удалить задачу ${esc(t.name||'Без названия')}" title="Удалить задачу">×</button></div><div class="track"><div class="grid">${Array.from({length:visibleSprints},(_,j)=>`<div class="${base+j===selected?'selected':''}"></div>`).join('')}</div><div class="task-bar" tabindex="0" role="slider" aria-label="Положение задачи ${esc(t.name||'Без названия')}"><div class="resize-handle left" data-edge="left"></div><div class="bar-content"><strong class="bar-name"></strong><span class="bar-unassigned" hidden title="Исполнитель не назначен" aria-label="Исполнитель не назначен">!</span><span class="bar-duration"></span></div><div class="resize-handle right" data-edge="right"></div></div><div class="empty-plan" hidden>В другом периоде</div></div></div>`).join('');
+  $('taskRows').innerHTML=tasks.map(t=>`<div class="task-row ${t.id===activeTaskId?'is-active':''}" data-task-id="${esc(t.id)}"><div class="task-info"><button class="task-reorder" aria-label="Изменить порядок задачи ${esc(t.name||'Без названия')}" title="Перетащить в пределах продукта · Alt + ↑/↓">⠿</button><input class="task-name" data-field="name" aria-label="Название задачи" maxlength="120" value="${esc(t.name)}"><div class="product-line"><span class="product-dot"></span><input data-field="product" aria-label="Продукт" placeholder="Продукт" maxlength="80" value="${esc(t.product)}"><span class="unassigned-label" hidden>Не назначено</span></div><button class="task-info-button" data-task-info aria-label="Информация о задаче: ${esc(t.name||'Без названия')}" title="Информация о задаче">ⓘ</button><button class="delete-task" data-delete aria-label="Удалить задачу ${esc(t.name||'Без названия')}" title="Удалить задачу">×</button></div><div class="track"><div class="grid">${Array.from({length:visibleSprints},(_,j)=>`<div class="${base+j===selected?'selected':''}"></div>`).join('')}</div><div class="task-bar" tabindex="0" role="slider" aria-label="Положение задачи ${esc(t.name||'Без названия')}"><div class="resize-handle left" data-edge="left"></div><div class="bar-content"><strong class="bar-name"></strong><span class="bar-unassigned" hidden title="Исполнитель не назначен" aria-label="Исполнитель не назначен">!</span><span class="bar-duration"></span></div><div class="resize-handle right" data-edge="right"></div></div><div class="empty-plan" hidden>В другом периоде</div></div></div>`).join('');
   $('emptyTasks').hidden=tasks.length>0;
 
 }
@@ -200,6 +200,7 @@ function renderDerived(){
     bar.setAttribute('aria-label',`Положение задачи ${t.name||'Без названия'}${unassigned?' — исполнитель не назначен':''}`);
     bar.title=unassigned?'Исполнитель не назначен':'';
     bar.setAttribute('aria-valuemin','1');bar.setAttribute('aria-valuemax','24');bar.setAttribute('aria-valuenow',t.start+1);bar.setAttribute('aria-valuetext',`Спринты ${t.start+1}–${t.end+1}`);
+    row.querySelector('[data-task-info]').setAttribute('aria-label',`Информация о задаче: ${t.name||'Без названия'}`);
     row.querySelector('[data-delete]').setAttribute('aria-label',`Удалить задачу ${t.name||'Без названия'}`);
   }
   $('selectedTaskName').textContent=currentTask()?.name||'Без названия';
@@ -230,7 +231,7 @@ $('clearTaskSelection').onclick=()=>{selectedTaskIds.clear();selectionAnchor=act
 // Modifiers select rows without starting a resize, reorder, or text selection.
 let selectionClickId=null;
 $('taskRows').addEventListener('pointerdown',e=>{
-  const row=e.target.closest('[data-task-id]');if(!row||e.button!==0||e.target.closest('[data-delete]'))return;
+  const row=e.target.closest('[data-task-id]');if(!row||e.button!==0||e.target.closest('[data-delete],[data-task-info]'))return;
   if(e.target.matches('input')&&document.activeElement===e.target)return;
   selectForMove(row.dataset.taskId,e);
   if(e.shiftKey||e.ctrlKey||e.metaKey){
@@ -255,8 +256,8 @@ function deleteTask(id){
   $('personPicker').hidden=true;renderRows();renderAllocations();persist();
 }
 $('addTask').onclick=addTask;$('emptyTasks').onclick=addTask;
-$('taskRows').addEventListener('click',e=>{const row=e.target.closest('[data-task-id]');if(!row)return;if(e.target.closest('[data-delete]')){deleteTask(row.dataset.taskId);return;}selectTask(row.dataset.taskId)});
-$('taskRows').addEventListener('focusin',e=>{const row=e.target.closest('[data-task-id]');if(row)selectTask(row.dataset.taskId)});
+$('taskRows').addEventListener('click',e=>{const row=e.target.closest('[data-task-id]');if(!row)return;if(e.target.closest('[data-task-info]'))return;if(e.target.closest('[data-delete]')){deleteTask(row.dataset.taskId);return;}selectTask(row.dataset.taskId)});
+$('taskRows').addEventListener('focusin',e=>{if(e.target.closest('[data-task-info]'))return;const row=e.target.closest('[data-task-id]');if(row)selectTask(row.dataset.taskId)});
 $('taskRows').addEventListener('input',e=>{const field=e.target.dataset.field;if(!field)return;const t=tasks.find(t=>t.id===e.target.closest('[data-task-id]').dataset.taskId);t[field]=e.target.value;save()});
 $('taskRows').addEventListener('focusout',e=>{if(e.target.dataset.field==='product')setTimeout(()=>renderDerived(),0);});
 $('taskRows').addEventListener('change',e=>{
@@ -327,7 +328,7 @@ function finishRowDrag(commit=false){
 }
 $('taskRows').addEventListener('pointerdown',e=>{
   const info=e.target.closest('.task-info');
-  if(!info||e.button!==0||e.target.closest('[data-delete],[data-field="product"]'))return;
+  if(!info||e.button!==0||e.target.closest('[data-delete],[data-task-info],[data-field="product"]'))return;
   // A focused title keeps normal text editing and selection.
   const input=e.target.closest('.task-name');if(input&&document.activeElement===input)return;
   const row=info.closest('[data-task-id]');selectTask(row.dataset.taskId);
@@ -498,6 +499,10 @@ function applyCloudPlan(plan){
     trash=plan.trash.filter(x=>validTask(x.task)).map(x=>({...x,task:cleanTask(x.task)}));
     productColors=new Map(Object.entries(plan.productColors));
     productDetails=new Map(Object.entries(plan.productDetails||{}));
+    if(productInfo.kind==='task'&&productInfo.product!==null){
+      const task=tasks.find(t=>t.id===productInfo.product);
+      if(task)productInfo.dialog.querySelector('h2').textContent=task.name||'Без названия';else productInfo.close();
+    }
     productInfo.refresh();
     ensureVisibleSelection();
     const newIds=tasks.filter(visibleTask).map(t=>t.id).join('|');
@@ -571,12 +576,18 @@ document.addEventListener('keydown',e=>{
 for(const event of ['change','focusin','pointerdown'])document.addEventListener(event,()=>cloud?.endAction());
 
 const productInfo=new ProductInfo({
-  read:name=>productDetails.get(name)||{},
-  write:(name,field,value)=>{productDetails.set(name,{...productDetails.get(name),[field]:value});persist();},
+  read:(name,kind)=>kind==='task'?tasks.find(t=>t.id===name)||{}:productDetails.get(name)||{},
+  write:(name,field,value,kind)=>{
+    if(kind==='task'){const task=tasks.find(t=>t.id===name);if(!task)return;task[field]=value;}
+    else productDetails.set(name,{...productDetails.get(name),[field]:value});
+    persist();
+  },
   end:()=>cloud?.endAction()
 });
 $('taskRows').addEventListener('click',e=>{
   const button=e.target.closest('[data-product-info]');
   if(button)productInfo.open(button.dataset.productInfo,button);
+  const taskButton=e.target.closest('[data-task-info]');
+  if(taskButton){const task=tasks.find(t=>t.id===taskButton.closest('[data-task-id]').dataset.taskId);if(task)productInfo.open(task.id,taskButton,{kind:'task',title:task.name||'Без названия'});}
 });
 window.addEventListener('tracker-auth-lost',()=>productInfo.close());

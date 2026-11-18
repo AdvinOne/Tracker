@@ -70,3 +70,6 @@ The toolbar has no Undo or Restore buttons; Ctrl/⌘+Z remains available, includ
 
 
 Product text uses one shared style vocabulary and palette for editing, paste and display. See [product text rules](docs/product-text-format.md) before filling descriptions through ChatGPT or any import. Browser checks in tests/rich-text-browser.js cover normalization, compatibility with legacy text, repeated rendering, allowed styles and unsafe HTML.
+
+
+Each task has an ⓘ button immediately before delete, opening the same view-first rich-text dialog as products. Task description/result are optional fields on the task entity, preserved by task moves, product changes, deletion/restoration and older clients. Their shared saving and conditional undo are independent from task dates, assignments and product information. Apply database/task-info.sql to an existing database. Task text follows docs/product-text-format.md.
