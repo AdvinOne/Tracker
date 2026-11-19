@@ -73,3 +73,6 @@ Product text uses one shared style vocabulary and palette for editing, paste and
 
 
 Each task has an ⓘ button immediately before delete, opening the same view-first rich-text dialog as products. Task description/result are optional fields on the task entity, preserved by task moves, product changes, deletion/restoration and older clients. Their shared saving and conditional undo are independent from task dates, assignments and product information. Apply database/task-info.sql to an existing database. Task text follows docs/product-text-format.md.
+
+
+Rich-text editors handle Tab/Shift+Tab as indent/outdent. Backspace at a collapsed list-item start outdents one level (or removes the top-level marker), and at an indented paragraph start removes one indentation level. Backspace inside text, selected text, modified shortcuts and IME retain native behavior. Paragraph indentation is normalized as nested blockquotes with a shared 24px step. Native editing commands preserve text undo.

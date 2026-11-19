@@ -322,3 +322,6 @@ body.reordering-task,body.reordering-task *{cursor:grabbing!important;user-selec
 .task-info-button{grid-column:2;grid-row:1 / 3;align-self:center;width:20px;height:20px;border:0;border-radius:4px;background:none;padding:0;color:#75826e;font-size:14px;line-height:1;cursor:pointer}
 .task-info-button:hover,.task-info-button:focus-visible{background:#e8eee1;color:#344d29}
 .delete-task{grid-column:3}
+
+/* One consistent indentation step, also after save and paste. */
+.rich-editor blockquote{margin:0 0 8px 24px!important;padding:0;border:0;color:inherit;font:inherit}
