@@ -40,3 +40,14 @@ test('Task info reaches shared capture and closes when the task is remotely dele
  assert.equal(d.querySelector('dialog').open,false);assert.equal(d.querySelectorAll('.task-row').length,1);
  }finally{dom.window.close();}
 });
+
+test('Backdrop clicks keep details open in view and edit modes; the close button still works',()=>{
+ const {dom,w,d}=setup();try{
+ d.querySelector('[data-task-info]').click();const dialog=d.querySelector('dialog');
+ dialog.getBoundingClientRect=()=>({left:100,right:500,top:100,bottom:500});
+ dialog.dispatchEvent(new w.MouseEvent('click',{bubbles:true,clientX:10,clientY:10}));assert.equal(dialog.open,true);
+ d.querySelector('.product-info-edit').click();const editor=d.querySelector('[data-info-field="description"]');editor.innerHTML='<p>Keep this text</p>';editor.dispatchEvent(new w.Event('input',{bubbles:true}));
+ dialog.dispatchEvent(new w.MouseEvent('click',{bubbles:true,clientX:900,clientY:900}));assert.equal(dialog.open,true);assert.equal(editor.getAttribute('contenteditable'),'true');assert.equal(editor.textContent,'Keep this text');
+ d.querySelector('.product-info-close').click();assert.equal(dialog.open,false);
+ }finally{dom.window.close();}
+});
